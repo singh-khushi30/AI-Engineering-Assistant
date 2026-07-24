@@ -1,0 +1,23 @@
+# Web framework — async API layer for routes, validation, and OpenAPI docs
+fastapi==0.115.12
+
+# ASGI server — runs FastAPI in production and development (standard extras: websockets, watchfiles, httptools)
+uvicorn[standard]==0.34.2
+
+# Settings management — typed env loading via BaseSettings (Pydantic v2)
+pydantic-settings==2.9.1
+
+# Loads .env into the process environment for local development
+python-dotenv==1.1.0
+
+# Multi-agent orchestration framework used by the AI Engineering Assistant
+crewai==0.120.1
+
+# HTTP client — async requests for tools, external APIs, and FastAPI TestClient
+httpx==0.28.1
+
+# Multipart form parsing — required by FastAPI for file uploads
+python-multipart==0.0.20
+
+# Testing framework for API and unit tests
+pytest==8.3.5
