@@ -21,3 +21,12 @@ python-multipart==0.0.20
 
 # Testing framework for API and unit tests
 pytest==8.3.5
+
+# Coverage measurement used by CoverageTool
+coverage==7.8.0
+
+# Fast Python linter used by RuffTool
+ruff==0.11.7
+
+# Security scanner used by BanditTool
+bandit==1.8.3
