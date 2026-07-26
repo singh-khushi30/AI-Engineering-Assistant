@@ -202,10 +202,17 @@ class ReviewOrchestrator:
             result = agent.run(context_builder())
             payload = result.to_dict() if isinstance(result, AgentResult) else dict(result)
             timings[f"agent_{name}"] = round(time.perf_counter() - started, 3)
+            data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+            llm_meta = data.get("llm") if isinstance(data.get("llm"), dict) else {}
+            parse_meta = data.get("parse") if isinstance(data.get("parse"), dict) else {}
             logger.info(
-                "%s finished success=%s execution_time=%.3fs",
+                "%s finished success=%s provider=%s model=%s parse_ok=%s "
+                "execution_time=%.3fs",
                 log_label,
                 payload.get("success"),
+                llm_meta.get("provider"),
+                llm_meta.get("model"),
+                parse_meta.get("parse_ok"),
                 timings[f"agent_{name}"],
             )
             return payload

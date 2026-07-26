@@ -18,9 +18,35 @@ class GitTool(BaseTool):
 
     name = "git"
 
-    def is_git_repository(self, project_path: str | Path) -> bool:
+    def resolve_git_root(self, project_path: str | Path) -> Path | None:
+        """Return the Git toplevel for ``project_path``, or None if not in a repo.
+
+        Uses ``git rev-parse --show-toplevel`` so nested paths (e.g. Backend/)
+        resolve to the real repository root (e.g. AI Engineering Assistant/).
+        """
         path = self.validate_project_path(project_path)
-        return (path / ".git").exists()
+        try:
+            git_exe = self.ensure_executable("git")
+        except ToolError:
+            return None
+
+        result = self.run_command(
+            [git_exe, "rev-parse", "--show-toplevel"],
+            cwd=path,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            return None
+        root = (result.stdout or "").strip()
+        if not root:
+            return None
+        resolved = Path(root).expanduser().resolve()
+        if not resolved.exists() or not resolved.is_dir():
+            return None
+        return resolved
+
+    def is_git_repository(self, project_path: str | Path) -> bool:
+        return self.resolve_git_root(project_path) is not None
 
     def get_current_branch(self, project_path: str | Path) -> str:
         path = self._require_git_repo(project_path)
@@ -92,38 +118,52 @@ class GitTool(BaseTool):
         """Collect a full Git status snapshot for the given project path."""
         _ = kwargs
         started = time.perf_counter()
-        path = self.validate_project_path(project_path)
+        requested = self.validate_project_path(project_path)
+        git_root = self.resolve_git_root(requested)
 
-        is_repo = self.is_git_repository(path)
         data: dict[str, Any] = {
-            "project_path": str(path),
-            "is_git_repository": is_repo,
+            "project_path": str(requested),
+            "requested_path": str(requested),
+            "git_root": str(git_root) if git_root else None,
+            "is_git_repository": git_root is not None,
             "branch": None,
             "modified_files": [],
             "staged_files": [],
             "untracked_files": [],
         }
 
-        if not is_repo:
+        if git_root is None:
             elapsed = time.perf_counter() - started
-            logger.info("%s path is not a git repository: %s", self.name, path)
+            logger.info(
+                "%s no git repository found at or above path=%s",
+                self.name,
+                requested,
+            )
             return self.success_result(
                 execution_time=elapsed,
                 data=data,
-                errors=["Path is not a Git repository"],
+                errors=["Path is not inside a Git repository"],
             )
 
-        data["branch"] = self.get_current_branch(path)
-        data["modified_files"] = self.get_modified_files(path)
-        data["staged_files"] = self.get_staged_files(path)
-        data["untracked_files"] = self.get_untracked_files(path)
-        data["diffstat"] = self.get_diffstat(path)
-        data["latest_commit"] = self.get_latest_commit(path)
+        logger.info(
+            "%s detected git_root=%s requested_path=%s",
+            self.name,
+            git_root,
+            requested,
+        )
+
+        data["branch"] = self.get_current_branch(git_root)
+        data["modified_files"] = self.get_modified_files(git_root)
+        data["staged_files"] = self.get_staged_files(git_root)
+        data["untracked_files"] = self.get_untracked_files(git_root)
+        data["diffstat"] = self.get_diffstat(git_root)
+        data["latest_commit"] = self.get_latest_commit(git_root)
 
         elapsed = time.perf_counter() - started
         logger.info(
-            "%s snapshot complete branch=%s modified=%s staged=%s untracked=%s",
+            "%s snapshot complete git_root=%s branch=%s modified=%s staged=%s untracked=%s",
             self.name,
+            git_root,
             data["branch"],
             len(data["modified_files"]),
             len(data["staged_files"]),
@@ -168,10 +208,11 @@ class GitTool(BaseTool):
 
     def _require_git_repo(self, project_path: str | Path) -> Path:
         path = self.validate_project_path(project_path)
-        if not self.is_git_repository(path):
-            raise ToolError(f"Not a Git repository: {path}")
+        root = self.resolve_git_root(path)
+        if root is None:
+            raise ToolError(f"Not inside a Git repository: {path}")
         self.ensure_executable("git")
-        return path
+        return root
 
     @staticmethod
     def _split_lines(output: str) -> list[str]:

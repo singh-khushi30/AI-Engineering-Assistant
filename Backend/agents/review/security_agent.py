@@ -13,6 +13,7 @@ class SecurityReviewAgent(BaseReviewAgent):
 
     name = "security_review_agent"
     prompt_namespace = "security_agent"
+    max_output_tokens: int = 8192
 
     def __init__(self, llm_service=None, summarizer: ToolSummaryService | None = None) -> None:  # noqa: ANN001
         super().__init__(llm_service=llm_service)

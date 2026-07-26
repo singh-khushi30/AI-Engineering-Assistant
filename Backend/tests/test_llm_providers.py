@@ -12,7 +12,6 @@ from app.services.exceptions import (
     LLMQuotaError,
     LLMRateLimitError,
     LLMTimeoutError,
-    MissingAPIKeyError,
 )
 from app.services.llm.base import BaseLLMProvider, ProviderResult
 from app.services.llm.factory import ProviderFactory

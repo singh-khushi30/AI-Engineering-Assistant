@@ -112,12 +112,16 @@ class BaseReviewAgent(BaseAIAgent):
                 messages,
                 max_tokens=self.max_output_tokens,
             )
-            elapsed = time.perf_counter() - started
+            provider = llm_result.data.get("provider")
+            model = llm_result.data.get("model")
 
             if not llm_result.success:
+                elapsed = time.perf_counter() - started
                 logger.error(
-                    "Agent failed name=%s errors=%s execution_time=%.3fs",
+                    "Agent failed name=%s provider=%s model=%s errors=%s execution_time=%.3fs",
                     self.name,
+                    provider,
+                    model,
                     llm_result.errors,
                     elapsed,
                 )
@@ -130,23 +134,31 @@ class BaseReviewAgent(BaseAIAgent):
                 )
 
             content = str(llm_result.data.get("content", ""))
+            report, parse_meta = self._parse_report_safe(content)
+            elapsed = time.perf_counter() - started
             logger.info(
-                "Response received agent=%s execution_time=%.3fs chars=%s",
+                "Agent finished name=%s provider=%s model=%s parse_ok=%s recovered=%s "
+                "fallback=%s execution_time=%.3fs chars=%s findings=%s",
                 self.name,
+                provider,
+                model,
+                parse_meta.get("parse_ok"),
+                parse_meta.get("recovered"),
+                parse_meta.get("fallback"),
                 elapsed,
                 len(content),
+                len(report.findings),
             )
-
-            report = self._parse_report(content)
             return AgentResult(
                 success=True,
                 agent=self.name,
                 execution_time=round(elapsed, 3),
                 data={
                     "review": report.to_dict(),
+                    "parse": parse_meta,
                     "llm": {
-                        "model": llm_result.data.get("model"),
-                        "provider": llm_result.data.get("provider"),
+                        "model": model,
+                        "provider": provider,
                         "usage": llm_result.data.get("usage"),
                         "raw_content": content,
                     },
@@ -154,7 +166,12 @@ class BaseReviewAgent(BaseAIAgent):
             )
         except ReviewAgentError as exc:
             elapsed = time.perf_counter() - started
-            logger.warning("Agent validation error name=%s error=%s", self.name, exc.message)
+            logger.warning(
+                "Agent validation error name=%s error=%s execution_time=%.3fs",
+                self.name,
+                exc.message,
+                elapsed,
+            )
             return AgentResult(
                 success=False,
                 agent=self.name,
@@ -162,19 +179,13 @@ class BaseReviewAgent(BaseAIAgent):
                 data={"details": exc.details},
                 errors=[exc.message],
             )
-        except InvalidLLMResponseError as exc:
-            elapsed = time.perf_counter() - started
-            logger.error("Invalid LLM JSON agent=%s error=%s", self.name, exc.message)
-            return AgentResult(
-                success=False,
-                agent=self.name,
-                execution_time=round(elapsed, 3),
-                data={"error": exc.to_dict()},
-                errors=[exc.message],
-            )
         except Exception as exc:  # noqa: BLE001 - agent boundary
             elapsed = time.perf_counter() - started
-            logger.exception("Agent error name=%s", self.name)
+            logger.exception(
+                "Agent error name=%s execution_time=%.3fs",
+                self.name,
+                elapsed,
+            )
             return AgentResult(
                 success=False,
                 agent=self.name,
@@ -182,8 +193,94 @@ class BaseReviewAgent(BaseAIAgent):
                 errors=[f"Agent error: {exc}"],
             )
 
+    def _parse_report_safe(self, content: str) -> tuple[ReviewReport, dict[str, Any]]:
+        """Parse/validate LLM JSON; never raise — returns fallback report if needed."""
+        warnings: list[str] = []
+        payload: dict[str, Any] | None = None
+        try:
+            payload = extract_json_object(content)
+        except InvalidLLMResponseError as exc:
+            logger.warning(
+                "JSON parse failed agent=%s error=%s preview=%s",
+                self.name,
+                exc.message,
+                (content or "")[:300].replace("\n", "\\n"),
+            )
+            warnings.append(exc.message)
+
+        if payload is not None:
+            try:
+                report = self._coerce_report(payload)
+                return report, {
+                    "parse_ok": True,
+                    "recovered": False,
+                    "fallback": False,
+                    "warnings": warnings,
+                }
+            except InvalidLLMResponseError as exc:
+                logger.warning(
+                    "Schema validation failed agent=%s error=%s keys=%s",
+                    self.name,
+                    exc.message,
+                    sorted(payload.keys()),
+                )
+                warnings.append(exc.message)
+                try:
+                    # Looser salvage: keep only well-shaped findings.
+                    salvaged = {
+                        "agent": self.name,
+                        "summary": str(payload.get("summary") or "Partial review recovered."),
+                        "findings": payload.get("findings")
+                        if isinstance(payload.get("findings"), list)
+                        else [],
+                        "recommendations": payload.get("recommendations")
+                        if isinstance(payload.get("recommendations"), list)
+                        else [],
+                        "severity": payload.get("severity") or "info",
+                        "confidence": payload.get("confidence") or 0.3,
+                    }
+                    report = self._coerce_report(salvaged)
+                    logger.info("Schema salvage succeeded agent=%s", self.name)
+                    return report, {
+                        "parse_ok": True,
+                        "recovered": True,
+                        "fallback": False,
+                        "warnings": warnings,
+                    }
+                except Exception as salvage_exc:  # noqa: BLE001
+                    warnings.append(f"Schema salvage failed: {salvage_exc}")
+
+        fallback = ReviewReport(
+            agent=self.name,
+            summary=(
+                "Review agent returned malformed JSON that could not be recovered. "
+                "No structured findings are available from this agent run."
+            ),
+            findings=[],
+            recommendations=[
+                "Re-run this review agent; the previous model response was not valid JSON."
+            ],
+            severity="info",
+            confidence=0.0,
+        )
+        logger.error(
+            "Using fallback review report agent=%s warnings=%s",
+            self.name,
+            warnings,
+        )
+        return fallback, {
+            "parse_ok": False,
+            "recovered": False,
+            "fallback": True,
+            "warnings": warnings,
+        }
+
     def _parse_report(self, content: str) -> ReviewReport:
         payload = extract_json_object(content)
+        return self._coerce_report(payload)
+
+    def _coerce_report(self, payload: dict[str, Any]) -> ReviewReport:
+        payload = dict(payload)
         payload.setdefault("agent", self.name)
         if "findings" in payload and isinstance(payload["findings"], list):
             normalized_findings: list[dict[str, Any]] = []
@@ -193,10 +290,28 @@ class BaseReviewAgent(BaseAIAgent):
                         {"title": item, "detail": item, "severity": "info"}
                     )
                 elif isinstance(item, dict):
-                    normalized_findings.append(item)
+                    finding = dict(item)
+                    finding.setdefault("title", finding.get("issue") or finding.get("name") or "Finding")
+                    finding.setdefault(
+                        "detail",
+                        finding.get("description")
+                        or finding.get("message")
+                        or finding.get("title")
+                        or "",
+                    )
+                    normalized_findings.append(finding)
             payload["findings"] = normalized_findings
+        elif "findings" not in payload:
+            payload["findings"] = []
+
         if "recommendations" in payload and isinstance(payload["recommendations"], list):
             payload["recommendations"] = [str(item) for item in payload["recommendations"]]
+        elif "recommendations" not in payload:
+            payload["recommendations"] = []
+
+        if not payload.get("summary"):
+            payload["summary"] = f"{self.name} completed without a summary."
+
         try:
             return ReviewReport.model_validate(payload)
         except Exception as exc:  # noqa: BLE001

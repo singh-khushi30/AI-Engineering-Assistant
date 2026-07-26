@@ -15,7 +15,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from agents.prompts.loader import render_prompt
-from app.services.llm_service import LLMMessage, LLMResult, LLMService
+from app.services.llm_service import LLMMessage, LLMService
 
 logger = logging.getLogger(__name__)
 

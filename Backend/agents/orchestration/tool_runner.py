@@ -88,6 +88,14 @@ class ReviewToolRunner:
             if not payload.get("success", True):
                 for err in payload.get("errors") or []:
                     context.tool_errors.append(f"{key}: {err}")
+            if key == "git":
+                git_data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+                logger.info(
+                    "Git tool detected git_root=%s requested_path=%s is_repo=%s",
+                    git_data.get("git_root"),
+                    git_data.get("requested_path") or git_data.get("project_path"),
+                    git_data.get("is_git_repository"),
+                )
             logger.info(
                 "%s finished success=%s execution_time=%.3fs",
                 log_label,

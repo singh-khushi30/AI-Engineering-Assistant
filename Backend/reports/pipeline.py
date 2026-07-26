@@ -12,7 +12,6 @@ from agents.orchestration.orchestrator import ReviewOrchestrator
 from app.core.config import get_settings
 from reports.builder import ReportBuilder
 from reports.exporter import ReportExporter
-from reports.schemas import ReportDocument
 
 logger = logging.getLogger(__name__)
 
