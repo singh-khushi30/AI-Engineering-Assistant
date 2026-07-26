@@ -1,0 +1,5 @@
+Execute the Style Review for the shared project context.
+
+Use the style review tool to analyze Ruff results already collected for this project.
+Return the structured style review JSON exactly as produced by the tool.
+Do not summarize other agents' work.

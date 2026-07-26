@@ -1,0 +1,5 @@
+Execute the Testing Review for the shared project context.
+
+Use the testing review tool to analyze pytest and coverage results already collected.
+Return the structured testing review JSON exactly as produced by the tool.
+Do not summarize other agents' work.

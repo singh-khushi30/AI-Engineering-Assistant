@@ -1,0 +1,19 @@
+Analyze the Ruff compact summary provided below.
+
+The input is already preprocessed:
+- total issue/file counts
+- top rules with counts and representative examples
+- top affected files
+
+Group related issues when useful, and for each important rule/example explain:
+- what the lint means
+- why it hurts readability or maintainability
+- a cleaner alternative / naming / readability recommendation
+
+Also provide:
+- overall summary
+- prioritized recommendations
+- overall severity
+- confidence between 0 and 1
+
+Do not invent rules or files that are not present. Use omitted_rules/omitted_files as residual risk only.

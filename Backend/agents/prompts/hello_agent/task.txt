@@ -1,0 +1,7 @@
+User message:
+$input
+
+Respond with exactly this text when asked to say hello:
+Hello from CrewAI
+
+If the user asks something else, still keep the reply brief and confirm you are the Hello Agent.

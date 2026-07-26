@@ -13,6 +13,12 @@ python-dotenv==1.1.0
 # Multi-agent orchestration framework used by the AI Engineering Assistant
 crewai==0.120.1
 
+# Official Google Gen AI SDK — default LLM provider (Gemini)
+google-genai==2.14.0
+
+# LiteLLM — used by CrewAI and optional non-Gemini providers
+litellm==1.68.0
+
 # HTTP client — async requests for tools, external APIs, and FastAPI TestClient
 httpx==0.28.1
 

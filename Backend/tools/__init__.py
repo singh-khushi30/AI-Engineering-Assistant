@@ -10,6 +10,7 @@ from tools.coverage_tool import CoverageTool
 from tools.git_tool import GitTool
 from tools.pytest_tool import PytestTool
 from tools.ruff_tool import RuffTool
+from tools.summarizers import ToolSummaryService
 
 __all__ = [
     "BanditTool",
@@ -20,4 +21,5 @@ __all__ = [
     "RuffTool",
     "ToolError",
     "ToolResult",
+    "ToolSummaryService",
 ]

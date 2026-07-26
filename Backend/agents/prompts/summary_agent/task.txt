@@ -1,0 +1,13 @@
+Analyze the specialized review-agent outputs provided below.
+
+Return a single JSON object with keys:
+- executive_summary (string)
+- themes (array of strings)
+- prioritized_issues (array of objects with title, detail, severity, category, recommendation)
+- grouped_issues (array of objects with theme, issue_titles)
+- recommendations (array of objects with title, rationale, tier)
+  where tier is one of: fix_immediately, recommended, nice_to_have
+- confidence (number between 0 and 1)
+
+Prioritize critical/high issues first.
+Explain why each recommendation matters in the rationale field.

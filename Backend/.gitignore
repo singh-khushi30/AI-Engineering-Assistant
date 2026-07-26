@@ -61,9 +61,14 @@ Thumbs.db
 *.log
 logs/
 
-# Reports (generated output; keep the folder)
-reports/*
-!reports/.gitkeep
+# Generated review artifacts (Python report package source remains tracked)
+reports/output/
+reports/*.json
+reports/*.md
+reports/*.html
+!reports/**/*.py
+!reports/formatters/
+!reports/formatters/**/*.py
 
 # CrewAI / local caches
 .crewai/

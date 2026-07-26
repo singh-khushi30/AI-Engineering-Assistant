@@ -1,0 +1,20 @@
+Analyze the Bandit compact summary provided below.
+
+The input is already preprocessed:
+- severity/confidence counts
+- top findings only (with file, line, issue, remediation, optional code snippet)
+- omitted_findings indicates how many lower-priority items were dropped
+
+For every top finding, produce a review finding that includes:
+- what the issue is
+- why it is dangerous
+- how to fix it
+- severity (critical|high|medium|low|info)
+
+Also provide:
+- an overall summary
+- prioritized recommendations
+- overall severity
+- confidence between 0 and 1
+
+Do not invent findings beyond the summary. Mention omitted_findings only as residual risk.

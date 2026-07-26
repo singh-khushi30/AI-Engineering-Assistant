@@ -1,0 +1,5 @@
+Execute the Architecture Review for the shared project context.
+
+Use the architecture review tool to analyze the scanned project structure.
+Return the structured architecture review JSON exactly as produced by the tool.
+Do not summarize other agents' work.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -116,6 +117,8 @@ class GitTool(BaseTool):
         data["modified_files"] = self.get_modified_files(path)
         data["staged_files"] = self.get_staged_files(path)
         data["untracked_files"] = self.get_untracked_files(path)
+        data["diffstat"] = self.get_diffstat(path)
+        data["latest_commit"] = self.get_latest_commit(path)
 
         elapsed = time.perf_counter() - started
         logger.info(
@@ -127,6 +130,41 @@ class GitTool(BaseTool):
             len(data["untracked_files"]),
         )
         return self.success_result(execution_time=elapsed, data=data)
+
+    def get_diffstat(self, project_path: str | Path) -> dict[str, int | str | None]:
+        """Return added/deleted line counts for working tree + index changes."""
+        path = self._require_git_repo(project_path)
+        result = self.run_command(
+            [self.ensure_executable("git"), "diff", "--shortstat", "HEAD"],
+            cwd=path,
+            timeout=30,
+        )
+        text = (result.stdout or "").strip()
+        files_changed = insertions = deletions = 0
+        if result.returncode == 0 and text:
+            files_match = re.search(r"(\d+)\s+files? changed", text)
+            insert_match = re.search(r"(\d+)\s+insertions?\(\+\)", text)
+            delete_match = re.search(r"(\d+)\s+deletions?\(-\)", text)
+            files_changed = int(files_match.group(1)) if files_match else 0
+            insertions = int(insert_match.group(1)) if insert_match else 0
+            deletions = int(delete_match.group(1)) if delete_match else 0
+        return {
+            "raw": text or None,
+            "files_changed": files_changed,
+            "insertions": insertions,
+            "deletions": deletions,
+        }
+
+    def get_latest_commit(self, project_path: str | Path) -> str | None:
+        path = self._require_git_repo(project_path)
+        result = self.run_command(
+            [self.ensure_executable("git"), "log", "-1", "--oneline"],
+            cwd=path,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            return None
+        return (result.stdout or "").strip() or None
 
     def _require_git_repo(self, project_path: str | Path) -> Path:
         path = self.validate_project_path(project_path)

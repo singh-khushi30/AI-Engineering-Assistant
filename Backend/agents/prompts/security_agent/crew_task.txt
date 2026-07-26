@@ -1,0 +1,5 @@
+Execute the Security Review for the shared project context.
+
+Use the security review tool to analyze Bandit results already collected for this project.
+Return the structured security review JSON exactly as produced by the tool.
+Do not summarize other agents' work.

@@ -1,0 +1,19 @@
+Analyze the pytest and/or coverage compact summaries provided below.
+
+Pytest summary includes pass/fail/skip counts and failing tests with truncated stack traces only.
+Coverage summary includes overall percentage and lowest-coverage files.
+
+Assess:
+- failed tests
+- missing or weak coverage
+- modules/files that need more tests
+- testing risks for production readiness
+
+Return:
+- summary
+- findings
+- recommendations
+- overall severity
+- confidence between 0 and 1
+
+Do not invent failed tests or coverage numbers not present in the summaries.

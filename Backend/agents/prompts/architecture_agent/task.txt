@@ -1,0 +1,16 @@
+Analyze the compact project structure (and optional git summary) provided below.
+
+Evaluate:
+- folder organization
+- separation of concerns
+- modularity
+- maintainability risks visible from structure
+
+Return:
+- summary
+- findings grounded in the provided structure
+- recommendations
+- overall severity
+- confidence between 0 and 1
+
+Do not invent folders/files beyond the summary. truncated_inventory means the inventory was capped.
