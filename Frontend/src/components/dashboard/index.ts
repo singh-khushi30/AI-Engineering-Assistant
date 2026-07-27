@@ -1,6 +1,7 @@
 export { CircularProgress } from "@/components/dashboard/CircularProgress";
 export { CoverageBreakdownCard } from "@/components/dashboard/CoverageBreakdown";
 export { DashboardHeader } from "@/components/dashboard/DashboardHeader";
+export { DashboardView } from "@/components/dashboard/DashboardView";
 export { ExecutiveSummaryCard } from "@/components/dashboard/ExecutiveSummaryCard";
 export { PrioritizedIssues } from "@/components/dashboard/PrioritizedIssues";
 export { ProgressBar } from "@/components/dashboard/ProgressBar";

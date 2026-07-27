@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopNavbar } from "@/components/layout/TopNavbar";
-import { NAV_ITEMS } from "@/constants/navigation";
+import { resolveNavMeta } from "@/constants/navigation";
 import { cn } from "@/lib/utils";
 
 type AppShellProps = {
@@ -17,20 +17,6 @@ type AppShellProps = {
   className?: string;
 };
 
-function resolvePageMeta(pathname: string): { title: string; subtitle: string } {
-  const match = NAV_ITEMS.find((item) => {
-    if (item.href === "/") {
-      return pathname === "/";
-    }
-    return pathname === item.href || pathname.startsWith(`${item.href}/`);
-  });
-
-  return {
-    title: match?.title ?? "Dashboard",
-    subtitle: match?.subtitle ?? "Overview of your latest AI code review",
-  };
-}
-
 export function AppShell({
   children,
   title,
@@ -40,7 +26,7 @@ export function AppShell({
   className,
 }: AppShellProps) {
   const pathname = usePathname();
-  const meta = resolvePageMeta(pathname);
+  const meta = resolveNavMeta(pathname);
 
   return (
     <div className={cn("flex min-h-screen bg-zinc-950 text-slate-100", className)}>

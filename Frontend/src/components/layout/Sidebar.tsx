@@ -9,19 +9,13 @@ import {
   APP_NAME,
   APP_TAGLINE,
   NAV_ITEMS,
+  isNavItemActive,
 } from "@/constants/navigation";
 import { cn } from "@/lib/utils";
 
 type SidebarProps = {
   className?: string;
 };
-
-function isActivePath(pathname: string, href: string): boolean {
-  if (href === "/") {
-    return pathname === "/";
-  }
-  return pathname === href || pathname.startsWith(`${href}/`);
-}
 
 export function Sidebar({ className }: SidebarProps) {
   const pathname = usePathname();
@@ -35,7 +29,7 @@ export function Sidebar({ className }: SidebarProps) {
       aria-label="Primary"
     >
       <div className="border-b border-slate-800 px-5 py-5">
-        <Link href="/" className="flex items-start gap-3">
+        <Link href="/dashboard" className="flex items-start gap-3">
           <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white shadow-sm shadow-blue-950/50">
             <Bot className="size-5" aria-hidden />
           </span>
@@ -57,7 +51,7 @@ export function Sidebar({ className }: SidebarProps) {
             href={item.href}
             label={item.label}
             icon={item.icon}
-            active={isActivePath(pathname, item.href)}
+            active={isNavItemActive(pathname, item.href)}
           />
         ))}
       </nav>
@@ -65,7 +59,7 @@ export function Sidebar({ className }: SidebarProps) {
       <div className="border-t border-slate-800 p-3">
         <button
           type="button"
-          className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2.5 text-sm font-medium text-white shadow-sm shadow-blue-950/40 transition-colors hover:bg-blue-500"
+          className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2.5 text-sm font-medium text-white shadow-sm shadow-blue-950/40 transition-colors hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
         >
           <Plus className="size-4" aria-hidden />
           New Review
