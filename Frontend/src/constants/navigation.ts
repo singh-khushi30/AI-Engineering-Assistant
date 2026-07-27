@@ -20,7 +20,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/",
     icon: LayoutDashboard,
     title: "Dashboard",
-    subtitle: "Overview of your AI code reviews",
+    subtitle: "Overview of your latest AI code review",
   },
   {
     label: "Reviews",

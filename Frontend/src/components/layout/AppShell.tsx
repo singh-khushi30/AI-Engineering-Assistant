@@ -12,6 +12,8 @@ type AppShellProps = {
   children: ReactNode;
   title?: string;
   subtitle?: string;
+  showHeading?: boolean;
+  actions?: ReactNode;
   className?: string;
 };
 
@@ -25,7 +27,7 @@ function resolvePageMeta(pathname: string): { title: string; subtitle: string } 
 
   return {
     title: match?.title ?? "Dashboard",
-    subtitle: match?.subtitle ?? "Overview of your AI code reviews",
+    subtitle: match?.subtitle ?? "Overview of your latest AI code review",
   };
 }
 
@@ -33,6 +35,8 @@ export function AppShell({
   children,
   title,
   subtitle,
+  showHeading = true,
+  actions,
   className,
 }: AppShellProps) {
   const pathname = usePathname();
@@ -46,6 +50,8 @@ export function AppShell({
         <TopNavbar
           title={title ?? meta.title}
           subtitle={subtitle ?? meta.subtitle}
+          showHeading={showHeading}
+          actions={actions}
           className="sticky top-0 z-10"
         />
 
