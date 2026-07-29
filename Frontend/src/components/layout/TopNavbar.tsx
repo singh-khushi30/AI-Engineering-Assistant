@@ -3,6 +3,7 @@
 import { Bell, ChevronDown, User } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { BackendStatusBadge } from "@/components/layout/BackendStatusBadge";
 import { DEFAULT_PROVIDER } from "@/constants/navigation";
 import { cn } from "@/lib/utils";
 
@@ -47,6 +48,7 @@ export function TopNavbar({
 
       <div className="flex shrink-0 items-center gap-2 sm:gap-3">
         {actions}
+        <BackendStatusBadge />
         <button
           type="button"
           className="inline-flex items-center gap-1.5 rounded-lg border border-slate-800 bg-zinc-900 px-2.5 py-1.5 text-xs font-medium text-slate-200 shadow-sm transition-colors hover:border-slate-700 hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:px-3 sm:text-sm"

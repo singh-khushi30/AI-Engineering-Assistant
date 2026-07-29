@@ -1,0 +1,17 @@
+import { getHttpBaseUrl } from "@/lib/http";
+import { healthService } from "@/services/health.service";
+import { reviewService } from "@/services/review.service";
+
+/**
+ * Central API surface for the frontend.
+ * Components and hooks should import from here (or services), never call fetch directly.
+ */
+export const api = {
+  baseUrl: getHttpBaseUrl,
+  health: healthService,
+  reviews: reviewService,
+} as const;
+
+export { healthService } from "@/services/health.service";
+export { reviewService } from "@/services/review.service";
+export { ApiError, getHttpBaseUrl, http } from "@/lib/http";
