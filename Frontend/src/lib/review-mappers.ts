@@ -4,13 +4,25 @@ import type {
   ReviewResultResponse,
   ReviewSummaryResponse,
 } from "@/types/api";
-import type { SeverityLevel } from "@/types/dashboard";
+import type {
+  CoverageBreakdown,
+  DashboardMockData,
+  ExecutiveSummary,
+  PrioritizedIssue,
+  ReportTile,
+  ReviewOverview,
+  ReviewSummaryCardData,
+  SeverityLevel,
+  StatusTone,
+  TimelineStep,
+} from "@/types/dashboard";
 import type {
   ReviewDetail,
   ReviewFindingGroup,
   ReviewListItem,
   ReviewStatus,
 } from "@/types/review";
+import type { ReportFormat, ReportItem } from "@/types/report";
 
 const PROVIDER_LABELS: Record<string, string> = {
   gemini: "Gemini",
@@ -22,17 +34,20 @@ const PROVIDER_LABELS: Record<string, string> = {
   azure_openai: "Azure OpenAI",
 };
 
-function asRecord(value: unknown): Record<string, unknown> {
+const SECRET_KEY_PATTERN =
+  /(api[_-]?key|apikey|authorization|password|secret|token|credential|private[_-]?key)/i;
+
+export function asRecord(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
 }
 
-function asArray(value: unknown): unknown[] {
+export function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
-function asString(value: unknown, fallback = "Not available"): string {
+export function asString(value: unknown, fallback = "Not available"): string {
   if (typeof value === "string" && value.trim()) {
     return value;
   }
@@ -42,7 +57,7 @@ function asString(value: unknown, fallback = "Not available"): string {
   return fallback;
 }
 
-function asNumber(value: unknown): number | null {
+export function asNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value;
   }
@@ -60,8 +75,11 @@ export function mapApiProviderToLabel(provider: string): string {
 
 export function mapApiSeverityToUiSeverity(value: unknown): SeverityLevel {
   const raw = String(value ?? "info").trim().toLowerCase();
-  if (raw === "critical" || raw === "high") {
-    return raw === "critical" ? "high" : "high";
+  if (raw === "critical") {
+    return "critical";
+  }
+  if (raw === "high") {
+    return "high";
   }
   if (raw === "medium" || raw === "moderate") {
     return "medium";
@@ -72,19 +90,23 @@ export function mapApiSeverityToUiSeverity(value: unknown): SeverityLevel {
   return "info";
 }
 
-export function mapApiJobStatusToUiStatus(
-  status: ReviewJobStatus,
-): ReviewStatus | null {
+export function mapApiJobStatusToUiStatus(status: ReviewJobStatus): ReviewStatus {
   if (status === "completed") {
     return "completed";
   }
-  if (status === "failed" || status === "cancelled") {
+  if (status === "failed") {
     return "failed";
   }
-  return null;
+  if (status === "cancelled") {
+    return "cancelled";
+  }
+  if (status === "running") {
+    return "running";
+  }
+  return "queued";
 }
 
-function formatDuration(seconds: number | null | undefined): string {
+export function formatDuration(seconds: number | null | undefined): string {
   if (seconds === null || seconds === undefined || !Number.isFinite(seconds)) {
     return "Not available";
   }
@@ -96,7 +118,7 @@ function formatDuration(seconds: number | null | undefined): string {
   return `${mins}m ${secs}s`;
 }
 
-function formatDateLabel(iso: string | null | undefined): string {
+export function formatDateLabel(iso: string | null | undefined): string {
   if (!iso) {
     return "Not available";
   }
@@ -114,7 +136,9 @@ function formatDateLabel(iso: string | null | undefined): string {
   }).format(date);
 }
 
-function extractCoveragePercent(result: Record<string, unknown> | null): number | null {
+export function extractCoveragePercent(
+  result: Record<string, unknown> | null,
+): number | null {
   if (!result) {
     return null;
   }
@@ -128,19 +152,23 @@ function extractCoveragePercent(result: Record<string, unknown> | null): number 
   );
 }
 
-function extractTestCounts(result: Record<string, unknown> | null): {
-  passed: number;
-  failed: number;
+export function extractTestCounts(result: Record<string, unknown> | null): {
+  passed: number | null;
+  failed: number | null;
 } {
   if (!result) {
-    return { passed: 0, failed: 0 };
+    return { passed: null, failed: null };
   }
   const aggregated = asRecord(result.aggregated_review);
   const tools = asRecord(aggregated.tools);
   const pytest = asRecord(asRecord(tools.pytest).data);
+  const skipped = Boolean(asRecord(asRecord(tools.pytest).data).skipped);
+  if (skipped && asNumber(pytest.passed) === null && asNumber(pytest.failed) === null) {
+    return { passed: null, failed: null };
+  }
   return {
-    passed: asNumber(pytest.passed) ?? asNumber(pytest.tests_passed) ?? 0,
-    failed: asNumber(pytest.failed) ?? asNumber(pytest.tests_failed) ?? 0,
+    passed: asNumber(pytest.passed) ?? asNumber(pytest.tests_passed),
+    failed: asNumber(pytest.failed) ?? asNumber(pytest.tests_failed),
   };
 }
 
@@ -153,22 +181,33 @@ function extractFindingsFromAgentPayload(
   const report = asRecord(data.report);
   const findings = asArray(report.findings).length
     ? asArray(report.findings)
-    : asArray(data.findings);
+    : asArray(data.findings).length
+      ? asArray(data.findings)
+      : asArray(root.findings);
 
   return findings.map((item, index) => {
     const finding = asRecord(item);
     return {
       id: `${category}-${index}`,
-      title: asString(finding.title, "Untitled finding"),
+      title:
+        asString(finding.title, "") ||
+        asString(finding.issue, "") ||
+        asString(finding.name, "Untitled finding"),
       severity: mapApiSeverityToUiSeverity(finding.severity),
-      detail: asString(finding.detail, ""),
-      file: asString(finding.file, "Not applicable"),
-      line: asNumber(finding.line),
+      detail:
+        asString(finding.detail, "") ||
+        asString(finding.description, "") ||
+        asString(finding.message, ""),
+      file:
+        asString(finding.file, "") ||
+        asString(finding.file_path, "") ||
+        asString(finding.path, "Not applicable"),
+      line: asNumber(finding.line) ?? asNumber(finding.line_number),
     };
   });
 }
 
-function extractFindingGroups(
+export function extractFindingGroups(
   result: Record<string, unknown> | null,
 ): ReviewFindingGroup[] {
   if (!result) {
@@ -183,21 +222,9 @@ function extractFindingGroups(
     label: string;
     payload: unknown;
   }> = [
-    {
-      category: "security",
-      label: "Security",
-      payload: detailed.security ?? aggregated.security,
-    },
-    {
-      category: "style",
-      label: "Style",
-      payload: detailed.style ?? aggregated.style,
-    },
-    {
-      category: "testing",
-      label: "Testing",
-      payload: detailed.testing ?? aggregated.testing,
-    },
+    { category: "security", label: "Security", payload: detailed.security ?? aggregated.security },
+    { category: "style", label: "Style", payload: detailed.style ?? aggregated.style },
+    { category: "testing", label: "Testing", payload: detailed.testing ?? aggregated.testing },
     {
       category: "architecture",
       label: "Architecture",
@@ -212,21 +239,24 @@ function extractFindingGroups(
   }));
 }
 
-function mapStepsToTimeline(
+export function mapStepsToTimeline(
   steps: ReviewProgressStep[],
   startedAt: string | null,
-): ReviewDetail["timeline"] {
-  const base = startedAt ? new Date(startedAt).getTime() : Date.now();
+): TimelineStep[] {
   return steps
     .filter((step) => step.status !== "skipped")
     .map((step, index) => {
-      const time = new Date(base + index * 1000).toLocaleTimeString("en-GB", {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: false,
-      });
-      let status: "completed" | "running" | "pending" = "pending";
+      const base = startedAt ? new Date(startedAt).getTime() : NaN;
+      const time = Number.isFinite(base)
+        ? new Date(base + index * 1000).toLocaleTimeString("en-GB", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: false,
+          })
+        : "—";
+
+      let status: TimelineStep["status"] = "pending";
       if (step.status === "completed") {
         status = "completed";
       } else if (step.status === "running") {
@@ -234,6 +264,7 @@ function mapStepsToTimeline(
       } else if (step.status === "failed") {
         status = "completed";
       }
+
       return {
         id: step.id,
         time,
@@ -245,14 +276,16 @@ function mapStepsToTimeline(
 
 export function mapApiSummaryToReviewListItem(
   item: ReviewSummaryResponse,
-): ReviewListItem | null {
+): ReviewListItem {
   const uiStatus = mapApiJobStatusToUiStatus(item.status);
-  if (!uiStatus) {
-    return null;
-  }
+  const testsUnavailable =
+    item.tests_passed === null &&
+    item.tests_failed === null &&
+    (item.status === "queued" || item.status === "running");
 
-  const testsLabel =
-    item.tests_passed === null && item.tests_failed === null
+  const testsLabel = testsUnavailable
+    ? "Not available"
+    : item.tests_passed === null && item.tests_failed === null
       ? "Not available"
       : item.tests_failed && item.tests_failed > 0
         ? `${item.tests_passed ?? 0} passed, ${item.tests_failed} failed`
@@ -285,6 +318,35 @@ export function mapApiSummaryToReviewListItem(
   };
 }
 
+export function sortSummariesNewestFirst(
+  items: ReviewSummaryResponse[],
+): ReviewSummaryResponse[] {
+  return [...items].sort((a, b) => {
+    const aTime = new Date(a.created_at).getTime();
+    const bTime = new Date(b.created_at).getTime();
+    return (Number.isFinite(bTime) ? bTime : 0) - (Number.isFinite(aTime) ? aTime : 0);
+  });
+}
+
+export function redactSensitiveJson(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => redactSensitiveJson(item));
+  }
+  if (value !== null && typeof value === "object") {
+    const input = value as Record<string, unknown>;
+    const output: Record<string, unknown> = {};
+    for (const [key, nested] of Object.entries(input)) {
+      if (SECRET_KEY_PATTERN.test(key)) {
+        output[key] = "[REDACTED]";
+      } else {
+        output[key] = redactSensitiveJson(nested);
+      }
+    }
+    return output;
+  }
+  return value;
+}
+
 export function mapApiReviewToReviewDetail(
   payload: ReviewResultResponse,
 ): ReviewDetail {
@@ -295,21 +357,26 @@ export function mapApiReviewToReviewDetail(
   const tests = extractTestCounts(result);
   const findingGroups = extractFindingGroups(result);
   const topIssues = asArray(report.top_issues);
-  const themes = asArray(summary.themes).map((theme) => asString(theme, "")).filter(Boolean);
-  const uiStatus = mapApiJobStatusToUiStatus(payload.status) ?? "failed";
+  const themes = asArray(summary.themes)
+    .map((theme) => asString(theme, ""))
+    .filter(Boolean);
+  const uiStatus = mapApiJobStatusToUiStatus(payload.status);
 
   const agentResults = findingGroups.map((group) => {
     const score = asRecord(report.category_scores)[group.category];
     const scoreNumber = asNumber(score);
+    const unavailable = result === null;
     return {
       id: group.category,
       title: group.label,
-      metric:
-        scoreNumber !== null
+      metric: unavailable
+        ? "Not available"
+        : scoreNumber !== null
           ? `${scoreNumber.toFixed(1)}/10`
           : `${group.findings.length} finding${group.findings.length === 1 ? "" : "s"}`,
-      statusLabel:
-        group.findings.length === 0
+      statusLabel: unavailable
+        ? "Not available"
+        : group.findings.length === 0
           ? "Clear"
           : `${group.findings.length} issue${group.findings.length === 1 ? "" : "s"}`,
     };
@@ -319,11 +386,24 @@ export function mapApiReviewToReviewDetail(
     const issue = asRecord(item);
     return {
       id: `issue-${index}`,
-      title: asString(issue.title, "Untitled issue"),
+      title:
+        asString(issue.title, "") ||
+        asString(issue.issue, "Untitled issue"),
       severity: mapApiSeverityToUiSeverity(issue.severity),
-      file: asString(issue.file, "Not applicable"),
+      file:
+        asString(issue.file, "") ||
+        asString(issue.file_path, "Not applicable"),
     };
   });
+
+  const raw =
+    result ??
+    ({
+      id: payload.id,
+      status: payload.status,
+      error: payload.error,
+      message: payload.message,
+    } as Record<string, unknown>);
 
   return {
     id: payload.id,
@@ -340,13 +420,177 @@ export function mapApiReviewToReviewDetail(
       report.executive_summary ?? summary.executive_summary,
       payload.error ?? "No executive summary available.",
     ),
-    highlights: themes.length > 0 ? themes : [],
+    highlights: themes,
     agentResults,
     prioritizedIssues,
     timeline: mapStepsToTimeline(payload.steps, payload.started_at),
     findingGroups,
-    rawJson: result ?? { id: payload.id, status: payload.status, error: payload.error },
+    rawJson: redactSensitiveJson(raw) as Record<string, unknown>,
   };
+}
+
+function toneForScore(score: number | null, findingCount: number): StatusTone {
+  if (score === null && findingCount === 0) {
+    return "neutral";
+  }
+  if (findingCount === 0 || (score !== null && score >= 8)) {
+    return "success";
+  }
+  if (findingCount > 0 && (score === null || score < 5)) {
+    return "danger";
+  }
+  return "warning";
+}
+
+export function mapApiReviewToDashboardData(
+  payload: ReviewResultResponse,
+): DashboardMockData {
+  const detail = mapApiReviewToReviewDetail(payload);
+  const result = payload.result ? asRecord(payload.result) : null;
+  const report = asRecord(result?.report);
+  const scores = asRecord(report.category_scores);
+  const tools = asRecord(asRecord(result?.aggregated_review).tools);
+  const coverageData = asRecord(asRecord(tools.coverage).data);
+  const coveredLines = asNumber(coverageData.covered_lines) ?? asNumber(coverageData.num_statements);
+  const totalLines = asNumber(coverageData.num_statements) ?? asNumber(coverageData.total_lines);
+  const modulesRaw = asArray(coverageData.files).length
+    ? asArray(coverageData.files)
+    : asArray(coverageData.modules);
+
+  const overview: ReviewOverview = {
+    projectName: detail.projectName,
+    projectPath: detail.projectPath,
+    badgeLabel: "Live review",
+    provider: detail.provider,
+    durationLabel: detail.durationLabel,
+    completedAt: detail.completedAt,
+    coveragePercent: detail.coveragePercent,
+    status: detail.status,
+  };
+
+  const summaryCards: ReviewSummaryCardData[] = detail.findingGroups.map((group) => {
+    const score = asNumber(scores[group.category]);
+    return {
+      id: group.category,
+      title: group.label,
+      primaryMetric:
+        score !== null
+          ? `${score.toFixed(1)}/10`
+          : `${group.findings.length} finding${group.findings.length === 1 ? "" : "s"}`,
+      supportingText:
+        group.findings.length === 0
+          ? "No active findings"
+          : `${group.findings.length} reported`,
+      statusLabel:
+        group.findings.length === 0
+          ? "Clear"
+          : `${group.findings.length} issue${group.findings.length === 1 ? "" : "s"}`,
+      statusTone: toneForScore(score, group.findings.length),
+    };
+  });
+
+  const executiveSummary: ExecutiveSummary = {
+    title: "Executive Summary",
+    body: detail.executiveSummary,
+    highlights: detail.highlights,
+  };
+
+  const coverage: CoverageBreakdown = {
+    overallPercent: detail.coveragePercent,
+    coveredLines: coveredLines,
+    totalLines: totalLines,
+    available: detail.coveragePercent !== null,
+    modules: modulesRaw.slice(0, 6).map((item, index) => {
+      const entry = asRecord(item);
+      const percent =
+        asNumber(entry.percent_covered) ??
+        asNumber(entry.coverage) ??
+        asNumber(entry.percent) ??
+        0;
+      return {
+        id: `mod-${index}`,
+        name: asString(entry.file ?? entry.name ?? entry.path, `Module ${index + 1}`),
+        percent,
+      };
+    }),
+  };
+
+  const prioritizedIssues: PrioritizedIssue[] = detail.prioritizedIssues;
+
+  const artifacts = asRecord(result?.artifacts);
+  const reports: ReportTile[] = (["json", "markdown", "html"] as const)
+    .filter((format) => Boolean(artifacts[format] || artifacts[format === "markdown" ? "md" : format]))
+    .map((format) => ({
+      id: `${payload.id}-${format}`,
+      name: `${detail.projectName}-review.${format === "markdown" ? "md" : format}`,
+      actionLabel: "Available on backend",
+      variant: format,
+    }));
+
+  return {
+    overview,
+    summaryCards,
+    executiveSummary,
+    timeline: detail.timeline,
+    coverage,
+    prioritizedIssues,
+    reports,
+  };
+}
+
+export function mapApiReviewToReportItems(
+  payload: ReviewResultResponse,
+): ReportItem[] {
+  if (payload.status !== "completed" || !payload.result) {
+    return [];
+  }
+  const result = asRecord(payload.result);
+  const artifacts = asRecord(result.artifacts);
+  const formats: Array<{ key: string; format: ReportFormat; ext: string }> = [
+    { key: "json", format: "json", ext: "json" },
+    { key: "markdown", format: "markdown", ext: "md" },
+    { key: "md", format: "markdown", ext: "md" },
+    { key: "html", format: "html", ext: "html" },
+  ];
+
+  const seen = new Set<ReportFormat>();
+  const items: ReportItem[] = [];
+
+  for (const entry of formats) {
+    if (seen.has(entry.format)) {
+      continue;
+    }
+    const pathValue = artifacts[entry.key];
+    if (typeof pathValue !== "string" || !pathValue.trim()) {
+      continue;
+    }
+    seen.add(entry.format);
+    const preview =
+      entry.format === "json"
+        ? JSON.stringify(
+            redactSensitiveJson(asRecord(result.report)),
+            null,
+            2,
+          )
+        : `Report file available on the backend host:\n${pathValue}`;
+
+    items.push({
+      id: `${payload.id}-${entry.format}`,
+      fileName: `${payload.project_name}-review.${entry.ext}`,
+      format: entry.format,
+      project: payload.project_name,
+      generatedAt: formatDateLabel(payload.completed_at ?? payload.created_at),
+      sizeLabel: "Available on backend",
+      provider: mapApiProviderToLabel(payload.provider),
+      preview,
+      backendPath: pathValue,
+      reviewId: payload.id,
+      canDownload: false,
+      canPreview: entry.format === "json" || Boolean(pathValue),
+    });
+  }
+
+  return items;
 }
 
 export function sanitizeApiErrorMessage(message: string): string {
@@ -364,4 +608,23 @@ export function sanitizeApiErrorMessage(message: string): string {
     return "Provider authentication failed. Check backend credentials and try again.";
   }
   return trimmed.length > 400 ? `${trimmed.slice(0, 397)}...` : trimmed;
+}
+
+export function pickLatestCompleted(
+  items: ReviewSummaryResponse[],
+): ReviewSummaryResponse | null {
+  return (
+    sortSummariesNewestFirst(items).find((item) => item.status === "completed") ??
+    null
+  );
+}
+
+export function pickLatestActive(
+  items: ReviewSummaryResponse[],
+): ReviewSummaryResponse | null {
+  return (
+    sortSummariesNewestFirst(items).find(
+      (item) => item.status === "queued" || item.status === "running",
+    ) ?? null
+  );
 }

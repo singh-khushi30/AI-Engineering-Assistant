@@ -1,10 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ApiError } from "@/lib/http";
+import {
+  fetchReviewResultCached,
+  invalidateLiveReviewCache,
+} from "@/lib/live-review-cache";
 import { sanitizeApiErrorMessage } from "@/lib/review-mappers";
-import { reviewService } from "@/services/review.service";
 import type { ReviewResultResponse } from "@/types/api";
 
 export type UseReviewResultOptions = {
@@ -15,7 +18,8 @@ export type UseReviewResultState = {
   data: ReviewResultResponse | null;
   error: string | null;
   isLoading: boolean;
-  retry: () => void;
+  isNotFound: boolean;
+  refetch: (options?: { force?: boolean }) => void;
 };
 
 function toErrorMessage(error: unknown): string {
@@ -36,12 +40,18 @@ export function useReviewResult(
   const [data, setData] = useState<ReviewResultResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isNotFound, setIsNotFound] = useState(false);
   const [retryToken, setRetryToken] = useState(0);
+  const forceRef = useRef(false);
   const requestIdRef = useRef(0);
 
-  const retry = useCallback(() => {
+  const refetch = useCallback((opts?: { force?: boolean }) => {
+    if (id && opts?.force) {
+      invalidateLiveReviewCache(id);
+      forceRef.current = true;
+    }
     setRetryToken((token) => token + 1);
-  }, []);
+  }, [id]);
 
   useEffect(() => {
     if (!enabled || !id) {
@@ -50,12 +60,17 @@ export function useReviewResult(
 
     const requestId = ++requestIdRef.current;
     const controller = new AbortController();
+    const force = forceRef.current;
+    forceRef.current = false;
 
     void (async () => {
       setIsLoading(true);
       setError(null);
+      setIsNotFound(false);
       try {
-        const result = await reviewService.getReviewResult(id, controller.signal);
+        const result = await fetchReviewResultCached(id, controller.signal, {
+          force,
+        });
         if (requestId !== requestIdRef.current) {
           return;
         }
@@ -65,7 +80,12 @@ export function useReviewResult(
           return;
         }
         setData(null);
-        setError(toErrorMessage(err));
+        if (err instanceof ApiError && err.status === 404) {
+          setIsNotFound(true);
+          setError("Review not found");
+        } else {
+          setError(toErrorMessage(err));
+        }
       } finally {
         if (requestId === requestIdRef.current) {
           setIsLoading(false);
@@ -79,8 +99,22 @@ export function useReviewResult(
   }, [enabled, id, retryToken]);
 
   if (!enabled) {
-    return { data: null, error: null, isLoading: false, retry };
+    return {
+      data: null,
+      error: null,
+      isLoading: false,
+      isNotFound: false,
+      refetch,
+    };
   }
 
-  return { data, error, isLoading, retry };
+  return { data, error, isLoading, isNotFound, refetch };
+}
+
+export function useResolvedReview(
+  reviewId: string | null | undefined,
+  options?: { enabled?: boolean },
+) {
+  const result = useReviewResult(reviewId, options);
+  return useMemo(() => result, [result]);
 }

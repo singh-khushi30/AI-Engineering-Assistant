@@ -1,6 +1,11 @@
 import type { SeverityLevel } from "@/types/dashboard";
 
-export type ReviewStatus = "completed" | "failed";
+export type ReviewStatus =
+  | "queued"
+  | "running"
+  | "completed"
+  | "failed"
+  | "cancelled";
 
 export type ReviewListItem = {
   id: string;
@@ -38,8 +43,8 @@ export type ReviewDetail = {
   durationLabel: string;
   completedAt: string;
   coveragePercent: number | null;
-  testsPassed: number;
-  testsFailed: number;
+  testsPassed: number | null;
+  testsFailed: number | null;
   executiveSummary: string;
   highlights: string[];
   agentResults: Array<{

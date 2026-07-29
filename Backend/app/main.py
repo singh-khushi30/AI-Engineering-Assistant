@@ -27,6 +27,11 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         settings.app_version,
         settings.app_env,
     )
+    # Hydrate persisted review history (and import legacy report JSON if needed).
+    from app.services.review_jobs import get_review_job_manager
+
+    manager = get_review_job_manager()
+    logger.info("Review history ready jobs=%s", len(manager.list_jobs()))
     yield
     logger.info("Shutting down %s", settings.app_name)
 

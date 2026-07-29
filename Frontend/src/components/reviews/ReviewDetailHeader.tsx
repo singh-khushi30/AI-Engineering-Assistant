@@ -43,8 +43,13 @@ export function ReviewDetailHeader({ review }: ReviewDetailHeaderProps) {
         <div className="rounded-lg border border-slate-800 bg-zinc-950/50 px-3 py-2.5">
           <dt className="text-xs text-slate-500">Tests</dt>
           <dd className="mt-1 text-sm text-slate-200">
-            {review.testsPassed} passed
-            {review.testsFailed > 0 ? `, ${review.testsFailed} failed` : ""}
+            {review.testsPassed === null && review.testsFailed === null
+              ? "Not available"
+              : `${review.testsPassed ?? 0} passed${
+                  review.testsFailed && review.testsFailed > 0
+                    ? `, ${review.testsFailed} failed`
+                    : ""
+                }`}
           </dd>
         </div>
       </dl>

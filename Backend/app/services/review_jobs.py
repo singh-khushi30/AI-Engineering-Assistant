@@ -1,4 +1,4 @@
-"""In-memory review job store and background runner."""
+"""In-memory review job store with JSON file persistence."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from agents.intelligence.intelligence import ReviewIntelligence
 from agents.orchestration.orchestrator import ReviewOrchestrator
@@ -26,10 +26,17 @@ from app.api.schemas.review import (
 from app.core.config import get_settings
 from app.core.llm_config import LLMProvider, get_llm_config
 from app.services.llm_service import LLMService
+from app.services.review_persistence import (
+    ReviewPersistence,
+    job_to_persisted_record,
+    parse_persisted_datetime,
+)
 from reports.builder import ReportBuilder
 from reports.exporter import ReportExporter
 
 logger = logging.getLogger(__name__)
+
+_TERMINAL_STATUSES = {"completed", "failed", "cancelled"}
 
 STEP_DEFINITIONS: list[tuple[str, str]] = [
     ("initialized", "Review initialized"),
@@ -84,17 +91,57 @@ class ReviewJob:
     steps: list[ReviewProgressStep] = field(default_factory=list)
     result: dict[str, Any] | None = None
     cancel_requested: bool = False
+    persisted: bool = False
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
 
 class ReviewJobManager:
-    """Process-local job registry (no database)."""
+    """Process-local job registry backed by JSON files for terminal reviews."""
 
-    def __init__(self, *, max_workers: int = 2) -> None:
+    def __init__(
+        self,
+        *,
+        max_workers: int = 2,
+        persistence: ReviewPersistence | None = None,
+        hydrate: bool = True,
+        import_legacy_reports: bool = True,
+    ) -> None:
         self._jobs: dict[str, ReviewJob] = {}
         self._lock = threading.Lock()
         self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="review-job")
         self._futures: dict[str, Future[None]] = {}
+        self.persistence = persistence or ReviewPersistence()
+        if hydrate:
+            self.hydrate(import_legacy_reports=import_legacy_reports)
+
+    def hydrate(self, *, import_legacy_reports: bool = True) -> int:
+        """Load persisted reviews into memory. Optionally import report JSON files."""
+        loaded = 0
+        try:
+            if import_legacy_reports:
+                imported = self.persistence.import_legacy_report_files()
+                if imported:
+                    logger.info(
+                        "Imported %s legacy report file(s) into review history",
+                        imported,
+                    )
+
+            for record in self.persistence.list_review_records():
+                job = self._job_from_persisted(record)
+                if job is None:
+                    continue
+                with self._lock:
+                    if job.id not in self._jobs:
+                        self._jobs[job.id] = job
+                        loaded += 1
+            logger.info(
+                "Hydrated %s persisted review(s) from %s",
+                loaded,
+                self.persistence.data_dir,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("Failed to hydrate persisted reviews")
+        return loaded
 
     def create_job(self, request: StartReviewRequest) -> ReviewJob:
         path = Path(request.project_path).expanduser()
@@ -134,7 +181,18 @@ class ReviewJobManager:
 
     def get_job(self, job_id: str) -> ReviewJob | None:
         with self._lock:
-            return self._jobs.get(job_id)
+            job = self._jobs.get(job_id)
+        if job is not None:
+            return job
+        record = self.persistence.load_review(job_id)
+        if not record:
+            return None
+        job = self._job_from_persisted(record)
+        if job is None:
+            return None
+        with self._lock:
+            self._jobs.setdefault(job.id, job)
+            return self._jobs[job.id]
 
     def list_jobs(self) -> list[ReviewJob]:
         with self._lock:
@@ -146,7 +204,7 @@ class ReviewJobManager:
         if job is None:
             return None
         with job._lock:
-            if job.status in {"completed", "failed", "cancelled"}:
+            if job.status in _TERMINAL_STATUSES:
                 return job
             job.cancel_requested = True
             if job.status == "queued":
@@ -156,6 +214,7 @@ class ReviewJobManager:
                 job.completed_at = _utcnow()
                 job.updated_at = job.completed_at
                 self._set_step(job, "completed", "failed", detail="Cancelled")
+                self._persist_job_unlocked(job)
             else:
                 job.message = "Cancellation requested"
                 job.updated_at = _utcnow()
@@ -204,6 +263,9 @@ class ReviewJobManager:
                 meta = report.get("metadata") or {}
                 duration = meta.get("execution_duration") or job.result.get("execution_time")
                 tools = (job.result.get("aggregated_review") or {}).get("tools") or {}
+                if not tools:
+                    appendix = report.get("appendix") if isinstance(report.get("appendix"), dict) else {}
+                    tools = appendix.get("tool_results") or {}
                 coverage_data = (tools.get("coverage") or {}).get("data") or {}
                 if isinstance(coverage_data.get("total_coverage"), (int, float)):
                     coverage = float(coverage_data["total_coverage"])
@@ -369,7 +431,8 @@ class ReviewJobManager:
             if not reports_dir.is_absolute():
                 reports_dir = Path.cwd() / reports_dir
             document = ReportBuilder().build(aggregated, intelligence_payload)
-            export_result = ReportExporter(reports_dir).export_all(document)
+            stem = f"{document.metadata.project_name}-review-{job.id[:8]}"
+            export_result = ReportExporter(reports_dir).export_all(document, stem=stem)
             self._mark_step(job, "report_generation", "completed")
 
             success = aggregated.success and bool(export_result["artifacts"].get("json"))
@@ -403,6 +466,7 @@ class ReviewJobManager:
                     job.error = _safe_error_message(errs[0] if errs else "Review failed")
                     job.failed_stage = job.current_step
                     self._set_step(job, "completed", "failed", detail=job.error)
+                self._persist_job_unlocked(job)
 
         except Exception as exc:  # noqa: BLE001
             logger.exception("Review job failed id=%s", job_id)
@@ -416,6 +480,7 @@ class ReviewJobManager:
                 if job.current_step:
                     self._set_step(job, job.current_step, "failed", detail=job.error)
                 self._set_step(job, "completed", "failed", detail=job.error)
+                self._persist_job_unlocked(job)
 
     def _finalize_cancelled(self, job: ReviewJob, *, timed_out: bool) -> None:
         with job._lock:
@@ -432,6 +497,112 @@ class ReviewJobManager:
                 job.message = "Review cancelled"
                 job.failed_stage = job.current_step
                 self._set_step(job, "completed", "failed", detail=job.error)
+            self._persist_job_unlocked(job)
+
+    def _job_from_persisted(self, record: dict[str, Any]) -> ReviewJob | None:
+        review_id = str(record.get("id") or "").strip()
+        if not review_id:
+            return None
+        status = str(record.get("status") or "completed")
+        if status not in {"queued", "running", "completed", "failed", "cancelled"}:
+            status = "completed"
+        if status in {"queued", "running"}:
+            status = "failed"
+
+        request_data = record.get("request") if isinstance(record.get("request"), dict) else {}
+        project_path = str(record.get("project_path") or request_data.get("project_path") or ".")
+        provider_raw = str(record.get("provider") or request_data.get("provider") or "gemini")
+        supported = {
+            "gemini",
+            "groq",
+            "openrouter",
+            "ollama",
+            "openai",
+            "anthropic",
+            "azure_openai",
+        }
+        provider = provider_raw if provider_raw in supported else "gemini"
+        try:
+            request = StartReviewRequest(
+                project_path=project_path,
+                provider=provider,
+                include_git=bool(request_data.get("include_git", True)),
+                include_bandit=bool(request_data.get("include_bandit", True)),
+                include_ruff=bool(request_data.get("include_ruff", True)),
+                include_pytest=bool(request_data.get("include_pytest", True)),
+                include_coverage=bool(request_data.get("include_coverage", True)),
+                coverage_target=request_data.get("coverage_target", 80.0),
+                timeout_seconds=request_data.get("timeout_seconds", 900),
+                enable_fallback=request_data.get("enable_fallback"),
+            )
+        except Exception:  # noqa: BLE001
+            request = StartReviewRequest(project_path=project_path, provider="gemini")
+
+        steps: list[ReviewProgressStep] = []
+        for item in record.get("steps") or []:
+            if not isinstance(item, dict):
+                continue
+            try:
+                steps.append(ReviewProgressStep.model_validate(item))
+            except Exception:  # noqa: BLE001
+                continue
+
+        return ReviewJob(
+            id=review_id,
+            request=request,
+            project_path=project_path,
+            project_name=str(record.get("project_name") or Path(project_path).name or "project"),
+            provider=str(record.get("provider") or provider),
+            status=status,  # type: ignore[arg-type]
+            created_at=parse_persisted_datetime(record.get("created_at")),
+            started_at=parse_persisted_datetime(record.get("started_at"))
+            if record.get("started_at")
+            else None,
+            updated_at=parse_persisted_datetime(
+                record.get("persisted_at")
+                or record.get("completed_at")
+                or record.get("created_at")
+            ),
+            completed_at=parse_persisted_datetime(record.get("completed_at"))
+            if record.get("completed_at")
+            else None,
+            current_step="completed" if status == "completed" else None,
+            message=str(record.get("message") or ""),
+            error=record.get("error"),
+            failed_stage=record.get("failed_stage"),
+            steps=steps,
+            result=record.get("result") if isinstance(record.get("result"), dict) else None,
+            persisted=True,
+        )
+
+    def _persist_job_unlocked(self, job: ReviewJob) -> None:
+        if job.status not in _TERMINAL_STATUSES:
+            return
+        duration = None
+        if job.started_at is not None and job.completed_at is not None:
+            duration = round((job.completed_at - job.started_at).total_seconds(), 3)
+        record = job_to_persisted_record(
+            review_id=job.id,
+            status=job.status,
+            project_name=job.project_name,
+            project_path=job.project_path,
+            provider=job.provider,
+            created_at=job.created_at,
+            started_at=job.started_at,
+            completed_at=job.completed_at,
+            duration_seconds=duration,
+            error=job.error,
+            failed_stage=job.failed_stage,
+            message=job.message,
+            steps=[step.model_dump() for step in job.steps],
+            request=job.request.model_dump(),
+            result=job.result,
+        )
+        try:
+            self.persistence.save_review(record)
+            job.persisted = True
+        except Exception:  # noqa: BLE001
+            logger.exception("Failed to persist review id=%s", job.id)
 
     def _mark_step(
         self,
@@ -479,3 +650,10 @@ def get_review_job_manager() -> ReviewJobManager:
         if _manager is None:
             _manager = ReviewJobManager()
         return _manager
+
+
+def reset_review_job_manager_for_tests() -> None:
+    """Test helper to clear the process singleton."""
+    global _manager
+    with _manager_lock:
+        _manager = None

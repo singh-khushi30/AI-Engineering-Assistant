@@ -14,12 +14,8 @@ import {
 import { Button } from "@/components/ui/Button";
 import { useElapsedTime } from "@/hooks/useElapsedTime";
 import { useReviewStatus } from "@/hooks/useReviewStatus";
-import {
-  mapApiProviderToLabel,
-  mapApiReviewToReviewDetail,
-  mapApiSummaryToReviewListItem,
-} from "@/lib/review-mappers";
-import { upsertSessionReview } from "@/lib/session-reviews";
+import { invalidateLiveReviewCache } from "@/lib/live-review-cache";
+import { mapApiProviderToLabel } from "@/lib/review-mappers";
 import { reviewService } from "@/services/review.service";
 import { cn } from "@/lib/utils";
 import type { ReviewProgressStep, ReviewStepStatus } from "@/types/api";
@@ -81,35 +77,8 @@ export function RunningReviewView({ reviewId }: RunningReviewViewProps) {
     }
 
     if (data.status === "completed") {
-      void (async () => {
-        try {
-          const result = await reviewService.getReviewResult(reviewId);
-          const detail = mapApiReviewToReviewDetail(result);
-          const listItem = mapApiSummaryToReviewListItem({
-            id: result.id,
-            project_name: result.project_name,
-            project_path: result.project_path,
-            provider: result.provider,
-            status: result.status,
-            coverage_percent: detail.coveragePercent,
-            tests_passed: detail.testsPassed,
-            tests_failed: detail.testsFailed,
-            high_count: detail.prioritizedIssues.filter((i) => i.severity === "high").length,
-            medium_count: detail.prioritizedIssues.filter((i) => i.severity === "medium").length,
-            low_count: detail.prioritizedIssues.filter((i) => i.severity === "low").length,
-            duration_seconds: result.duration_seconds,
-            created_at: result.created_at,
-            completed_at: result.completed_at,
-            error: result.error,
-          });
-          if (listItem) {
-            upsertSessionReview(listItem);
-          }
-        } catch {
-          // Session list enrichment is best-effort.
-        }
-        router.replace(`/reviews/${reviewId}`);
-      })();
+      invalidateLiveReviewCache();
+      router.replace(`/reviews/${reviewId}`);
     }
   }, [data, isTerminal, reviewId, router]);
 

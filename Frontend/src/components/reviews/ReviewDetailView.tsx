@@ -158,7 +158,12 @@ export function ReviewDetailView({ review }: ReviewDetailViewProps) {
           <section className="rounded-xl border border-slate-800 bg-zinc-900/50 p-5">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-base font-semibold text-slate-50">Raw JSON</h2>
-              <Button variant="secondary" size="sm" onClick={copyJson}>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={copyJson}
+                aria-live="polite"
+              >
                 {copied ? (
                   <Check className="size-4 text-emerald-400" aria-hidden />
                 ) : (

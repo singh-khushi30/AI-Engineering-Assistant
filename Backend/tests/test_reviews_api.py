@@ -32,7 +32,11 @@ def test_get_unknown_review_returns_404() -> None:
 
 
 def test_start_review_queues_job() -> None:
-    manager = ReviewJobManager(max_workers=1)
+    manager = ReviewJobManager(
+        max_workers=1,
+        hydrate=False,
+        import_legacy_reports=False,
+    )
 
     def fake_run(job_id: str) -> None:
         job = manager.get_job(job_id)
@@ -75,7 +79,11 @@ def test_start_review_queues_job() -> None:
 
 
 def test_cancel_queued_review() -> None:
-    manager = ReviewJobManager(max_workers=1)
+    manager = ReviewJobManager(
+        max_workers=1,
+        hydrate=False,
+        import_legacy_reports=False,
+    )
 
     # Prevent background execution from racing cancel.
     with patch.object(manager._executor, "submit", return_value=MagicMock()):

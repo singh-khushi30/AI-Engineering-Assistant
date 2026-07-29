@@ -21,7 +21,7 @@ export type ReviewOverview = {
   provider: string;
   durationLabel: string;
   completedAt: string;
-  coveragePercent: number;
+  coveragePercent: number | null;
   status: string;
 };
 
@@ -54,10 +54,11 @@ export type CoverageModule = {
 };
 
 export type CoverageBreakdown = {
-  overallPercent: number;
-  coveredLines: number;
-  totalLines: number;
+  overallPercent: number | null;
+  coveredLines: number | null;
+  totalLines: number | null;
   modules: CoverageModule[];
+  available: boolean;
 };
 
 export type PrioritizedIssue = {

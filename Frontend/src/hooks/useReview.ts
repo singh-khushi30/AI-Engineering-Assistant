@@ -1,14 +1,12 @@
 "use client";
 
 /**
- * Transitional re-exports. Prefer dedicated hooks:
- * - useStartReview
- * - useReviewStatus
- * - useReviewResult
+ * Transitional re-exports for review hooks.
  */
 
 export { useReviewResult as useReview } from "@/hooks/useReviewResult";
 export { useReviewStatus } from "@/hooks/useReviewStatus";
 export { useStartReview } from "@/hooks/useStartReview";
-
-export { useReviewActions, useReviews } from "@/hooks/useReviewLegacy";
+export { useReviewList } from "@/hooks/useReviewList";
+export { useLiveDashboard } from "@/hooks/useLiveDashboard";
+export { useReviewActions } from "@/hooks/useReviewLegacy";

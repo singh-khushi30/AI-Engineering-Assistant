@@ -100,6 +100,7 @@ class Settings(BaseSettings):
     score_penalty_low: float = Field(default=0.15, alias="SCORE_PENALTY_LOW")
     score_penalty_info: float = Field(default=0.05, alias="SCORE_PENALTY_INFO")
     reports_dir: str = Field(default="reports/output", alias="REPORTS_DIR")
+    reviews_data_dir: str = Field(default="data/reviews", alias="REVIEWS_DATA_DIR")
 
     # Tool-output summarization (compact LLM context)
     summary_top_n_findings: int = Field(default=15, alias="SUMMARY_TOP_N_FINDINGS")

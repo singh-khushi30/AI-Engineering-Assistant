@@ -1,11 +1,10 @@
 import { AppShell } from "@/components/layout/AppShell";
-import { ReportsLibrary } from "@/components/reports/ReportsLibrary";
-import { reportsMock } from "@/data/reports-mock";
+import { LiveReportsLibrary } from "@/components/reports/LiveReportsLibrary";
 
 export default function ReportsPage() {
   return (
     <AppShell showHeading={false}>
-      <ReportsLibrary reports={reportsMock} />
+      <LiveReportsLibrary />
     </AppShell>
   );
 }

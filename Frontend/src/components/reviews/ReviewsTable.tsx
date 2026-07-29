@@ -20,7 +20,10 @@ type ReviewsTableProps = {
 const filters: Array<{ key: FilterKey; label: string }> = [
   { key: "all", label: "All" },
   { key: "completed", label: "Completed" },
+  { key: "running", label: "Running" },
+  { key: "queued", label: "Queued" },
   { key: "failed", label: "Failed" },
+  { key: "cancelled", label: "Cancelled" },
 ];
 
 export function ReviewsTable({ reviews }: ReviewsTableProps) {
@@ -113,7 +116,11 @@ export function ReviewsTable({ reviews }: ReviewsTableProps) {
               <tr key={review.id} className="hover:bg-zinc-900/50">
                 <td className="px-4 py-3 font-medium text-slate-100">
                   <Link
-                    href={`/reviews/${review.id}`}
+                    href={
+                      review.status === "queued" || review.status === "running"
+                        ? `/reviews/${review.id}/running`
+                        : `/reviews/${review.id}`
+                    }
                     className="hover:text-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                   >
                     {review.projectName}
@@ -134,7 +141,11 @@ export function ReviewsTable({ reviews }: ReviewsTableProps) {
                 <td className="px-4 py-3 text-slate-400">{review.dateLabel}</td>
                 <td className="px-4 py-3">
                   <Link
-                    href={`/reviews/${review.id}`}
+                    href={
+                      review.status === "queued" || review.status === "running"
+                        ? `/reviews/${review.id}/running`
+                        : `/reviews/${review.id}`
+                    }
                     aria-label={`Open ${review.projectName} review`}
                     className="inline-flex size-8 items-center justify-center rounded-lg text-slate-400 hover:bg-zinc-900 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                   >
@@ -151,7 +162,11 @@ export function ReviewsTable({ reviews }: ReviewsTableProps) {
         {filtered.map((review) => (
           <Link
             key={review.id}
-            href={`/reviews/${review.id}`}
+            href={
+              review.status === "queued" || review.status === "running"
+                ? `/reviews/${review.id}/running`
+                : `/reviews/${review.id}`
+            }
             className="block rounded-xl border border-slate-800 bg-zinc-900/50 p-4 transition-colors hover:border-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             <div className="flex items-start justify-between gap-3">

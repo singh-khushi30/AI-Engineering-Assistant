@@ -7,12 +7,16 @@ type DashboardHeaderProps = {
   title?: string;
   subtitle?: string;
   className?: string;
+  onRefresh?: () => void;
+  refreshing?: boolean;
 };
 
 export function DashboardHeader({
   title = "Dashboard",
   subtitle = "Overview of your latest AI code review",
   className,
+  onRefresh,
+  refreshing = false,
 }: DashboardHeaderProps) {
   return (
     <div
@@ -38,10 +42,16 @@ export function DashboardHeader({
         </Link>
         <button
           type="button"
-          className="inline-flex size-10 items-center justify-center rounded-lg border border-slate-800 bg-zinc-900 text-slate-300 transition-colors hover:border-slate-700 hover:bg-zinc-800 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          onClick={onRefresh}
+          disabled={!onRefresh || refreshing}
+          className="inline-flex size-10 items-center justify-center rounded-lg border border-slate-800 bg-zinc-900 text-slate-300 transition-colors hover:border-slate-700 hover:bg-zinc-800 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
           aria-label="Refresh dashboard"
+          aria-busy={refreshing}
         >
-          <RefreshCw className="size-4" aria-hidden />
+          <RefreshCw
+            className={cn("size-4", refreshing && "animate-spin")}
+            aria-hidden
+          />
         </button>
       </div>
     </div>

@@ -9,4 +9,8 @@ export type ReportItem = {
   sizeLabel: string;
   provider: string;
   preview: string;
+  backendPath?: string;
+  reviewId?: string;
+  canDownload?: boolean;
+  canPreview?: boolean;
 };

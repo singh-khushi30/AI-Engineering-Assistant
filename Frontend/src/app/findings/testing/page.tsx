@@ -1,11 +1,10 @@
-import { FindingsPage } from "@/components/findings/FindingsPage";
+import { LiveFindingsView } from "@/components/findings/LiveFindingsView";
 import { AppShell } from "@/components/layout/AppShell";
-import { findingsPagesMock } from "@/data/findings-mock";
 
 export default function TestingFindingsRoute() {
   return (
     <AppShell showHeading={false}>
-      <FindingsPage data={findingsPagesMock.testing} />
+      <LiveFindingsView category="testing" />
     </AppShell>
   );
 }

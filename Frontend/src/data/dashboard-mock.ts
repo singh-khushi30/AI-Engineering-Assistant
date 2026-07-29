@@ -121,6 +121,7 @@ export const dashboardMock: DashboardMockData = {
     overallPercent: 73.93,
     coveredLines: 763,
     totalLines: 2803,
+    available: true,
     modules: [
       { id: "llm", name: "LLM Services", percent: 11.11 },
       { id: "agents", name: "Agents & Crews", percent: 35.09 },

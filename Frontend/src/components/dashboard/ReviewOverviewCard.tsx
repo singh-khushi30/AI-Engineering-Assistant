@@ -65,7 +65,13 @@ export function ReviewOverviewCard({ data, className }: ReviewOverviewCardProps)
         </div>
 
         <div className="flex shrink-0 flex-col items-center gap-2 rounded-xl border border-slate-800 bg-zinc-950/50 px-6 py-4">
-          <CircularProgress value={data.coveragePercent} />
+          {data.coveragePercent === null ? (
+            <div className="flex size-[88px] items-center justify-center rounded-full border border-slate-800 text-sm font-semibold text-slate-400">
+              N/A
+            </div>
+          ) : (
+            <CircularProgress value={data.coveragePercent} />
+          )}
           <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
             Overall Coverage
           </p>

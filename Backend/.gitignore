@@ -70,6 +70,10 @@ reports/*.html
 !reports/formatters/
 !reports/formatters/**/*.py
 
+# Persisted review history (local JSON store)
+data/reviews/*.json
+!data/reviews/.gitkeep
+
 # CrewAI / local caches
 .crewai/
 .cache/
