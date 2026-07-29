@@ -57,13 +57,13 @@ export function Sidebar({ className }: SidebarProps) {
       </nav>
 
       <div className="border-t border-slate-800 p-3">
-        <button
-          type="button"
+        <Link
+          href="/reviews/new"
           className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2.5 text-sm font-medium text-white shadow-sm shadow-blue-950/40 transition-colors hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
         >
           <Plus className="size-4" aria-hidden />
           New Review
-        </button>
+        </Link>
       </div>
     </aside>
   );

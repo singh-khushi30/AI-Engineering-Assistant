@@ -1,7 +1,5 @@
-import { notFound } from "next/navigation";
-
 import { AppShell } from "@/components/layout/AppShell";
-import { ReviewDetailView } from "@/components/reviews/ReviewDetailView";
+import { LiveReviewDetail } from "@/components/reviews/LiveReviewDetail";
 import { getReviewById } from "@/data/reviews-mock";
 
 type ReviewDetailPageProps = {
@@ -10,15 +8,11 @@ type ReviewDetailPageProps = {
 
 export default async function ReviewDetailPage({ params }: ReviewDetailPageProps) {
   const { id } = await params;
-  const review = getReviewById(id);
-
-  if (!review) {
-    notFound();
-  }
+  const mock = getReviewById(id) ?? null;
 
   return (
     <AppShell showHeading={false}>
-      <ReviewDetailView review={review} />
+      <LiveReviewDetail reviewId={id} mockFallback={mock} />
     </AppShell>
   );
 }

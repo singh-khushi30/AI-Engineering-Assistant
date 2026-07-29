@@ -1,39 +1,21 @@
 import { http } from "@/lib/http";
 import type {
-  CreateReviewRequest,
-  ReviewDetailResponse,
   ReviewListResponse,
-  ReviewReportFormat,
-  ReviewReportResponse,
+  ReviewResultResponse,
   ReviewStatusResponse,
-  ReviewSummaryResponse,
+  StartReviewRequest,
+  StartReviewResponse,
 } from "@/types/api";
 
 /**
- * Review API wrappers.
- * Methods mirror expected FastAPI routes so the UI can adopt them without
- * rewriting fetch logic. Endpoints may not all be live yet.
+ * Review API wrappers — aligned to Backend `/reviews*` routes.
  */
 export const reviewService = {
-  listReviews(signal?: AbortSignal): Promise<ReviewListResponse> {
-    return http<ReviewListResponse>("/reviews", {
-      method: "GET",
-      signal,
-    });
-  },
-
-  getReview(id: string, signal?: AbortSignal): Promise<ReviewDetailResponse> {
-    return http<ReviewDetailResponse>(`/reviews/${encodeURIComponent(id)}`, {
-      method: "GET",
-      signal,
-    });
-  },
-
-  createReview(
-    payload: CreateReviewRequest,
+  startReview(
+    payload: StartReviewRequest,
     signal?: AbortSignal,
-  ): Promise<ReviewSummaryResponse> {
-    return http<ReviewSummaryResponse>("/reviews", {
+  ): Promise<StartReviewResponse> {
+    return http<StartReviewResponse>("/reviews", {
       method: "POST",
       body: payload,
       timeoutMs: 30_000,
@@ -41,26 +23,46 @@ export const reviewService = {
     });
   },
 
-  getReviewStatus(id: string, signal?: AbortSignal): Promise<ReviewStatusResponse> {
+  /** @deprecated Prefer startReview */
+  createReview(
+    payload: StartReviewRequest,
+    signal?: AbortSignal,
+  ): Promise<StartReviewResponse> {
+    return reviewService.startReview(payload, signal);
+  },
+
+  listReviews(signal?: AbortSignal): Promise<ReviewListResponse> {
+    return http<ReviewListResponse>("/reviews", {
+      method: "GET",
+      signal,
+    });
+  },
+
+  getReviewResult(
+    id: string,
+    signal?: AbortSignal,
+  ): Promise<ReviewResultResponse> {
+    return http<ReviewResultResponse>(`/reviews/${encodeURIComponent(id)}`, {
+      method: "GET",
+      timeoutMs: 30_000,
+      signal,
+    });
+  },
+
+  /** Alias used by hooks / detail pages */
+  getReview(id: string, signal?: AbortSignal): Promise<ReviewResultResponse> {
+    return reviewService.getReviewResult(id, signal);
+  },
+
+  getReviewStatus(
+    id: string,
+    signal?: AbortSignal,
+  ): Promise<ReviewStatusResponse> {
     return http<ReviewStatusResponse>(
       `/reviews/${encodeURIComponent(id)}/status`,
       {
         method: "GET",
-        signal,
-      },
-    );
-  },
-
-  getReviewReport(
-    id: string,
-    format: ReviewReportFormat = "json",
-    signal?: AbortSignal,
-  ): Promise<ReviewReportResponse> {
-    const query = new URLSearchParams({ format });
-    return http<ReviewReportResponse>(
-      `/reviews/${encodeURIComponent(id)}/report?${query.toString()}`,
-      {
-        method: "GET",
+        timeoutMs: 15_000,
         signal,
       },
     );

@@ -84,10 +84,32 @@ class ReviewOrchestrator:
             },
         )
 
-    def run(self, project_path: str | Path) -> AggregatedReview:
-        """Execute the full review workflow and return aggregated JSON-ready data."""
+    def run(
+        self,
+        project_path: str | Path,
+        *,
+        include_git: bool = True,
+        include_bandit: bool = True,
+        include_ruff: bool = True,
+        include_pytest: bool = True,
+        include_coverage: bool = True,
+        progress_callback: Callable[[str, str], None] | None = None,
+        should_cancel: Callable[[], bool] | None = None,
+    ) -> AggregatedReview:
+        """Execute the full review workflow and return aggregated JSON-ready data.
+
+        ``progress_callback`` receives ``(step_id, event)`` where event is one of
+        ``started`` | ``completed`` | ``failed`` | ``skipped``.
+        """
         overall_started = time.perf_counter()
         errors: list[str] = []
+
+        def emit(step_id: str, event: str) -> None:
+            if progress_callback is not None:
+                progress_callback(step_id, event)
+
+        def cancelled() -> bool:
+            return bool(should_cancel and should_cancel())
 
         try:
             context = self.create_context(project_path)
@@ -101,9 +123,50 @@ class ReviewOrchestrator:
                 errors=[str(exc)],
             )
 
+        if cancelled():
+            return AggregatedReview(
+                success=False,
+                project_path=str(context.project_path),
+                execution_time=round(time.perf_counter() - overall_started, 3),
+                errors=["Review cancelled"],
+            )
+
         logger.info("Loading Project path=%s", context.project_path)
-        self.tool_runner.run_all(context)
+
+        def on_tool_start(tool_key: str) -> None:
+            emit(tool_key, "started")
+
+        def on_tool_end(tool_key: str, ok: bool) -> None:
+            emit(tool_key, "completed" if ok else "failed")
+
+        self.tool_runner.run_all(
+            context,
+            include_git=include_git,
+            include_bandit=include_bandit,
+            include_ruff=include_ruff,
+            include_pytest=include_pytest,
+            include_coverage=include_coverage,
+            on_tool_start=on_tool_start,
+            on_tool_end=on_tool_end,
+        )
         errors.extend(context.tool_errors)
+
+        if cancelled():
+            return AggregatedReview(
+                success=False,
+                project_path=str(context.project_path),
+                execution_time=round(time.perf_counter() - overall_started, 3),
+                tools={
+                    "git": context.git_result,
+                    "bandit": context.bandit_result,
+                    "ruff": context.ruff_result,
+                    "pytest": context.pytest_result,
+                    "coverage": context.coverage_result,
+                    "project_structure": context.project_structure,
+                },
+                errors=errors + ["Review cancelled"],
+                timings=context.timings,
+            )
 
         crew_info: dict[str, Any] = {"registered": False}
         try:
@@ -123,21 +186,51 @@ class ReviewOrchestrator:
             crew_info = {"registered": False, "error": message}
 
         agent_results: dict[str, dict[str, Any] | None] = {}
-        agent_results["security"] = self._launch_agent(
+
+        def run_agent(
+            *,
+            step_id: str,
+            name: str,
+            log_label: str,
+            factory: AgentFactory,
+            context_builder: Callable[[], dict[str, Any]],
+        ) -> dict[str, Any]:
+            if cancelled():
+                emit(step_id, "failed")
+                return {
+                    "success": False,
+                    "agent": name,
+                    "execution_time": 0.0,
+                    "data": {},
+                    "errors": ["Review cancelled"],
+                }
+            emit(step_id, "started")
+            payload = self._launch_agent(
+                name=name,
+                log_label=log_label,
+                factory=factory,
+                context_builder=context_builder,
+                timings=context.timings,
+            )
+            emit(step_id, "completed" if payload.get("success") else "failed")
+            return payload
+
+        agent_results["security"] = run_agent(
+            step_id="security_agent",
             name="security",
             log_label="Launching Security Agent",
             factory=self._security_agent_factory,
             context_builder=lambda: {"bandit_result": context.bandit_result},
-            timings=context.timings,
         )
-        agent_results["style"] = self._launch_agent(
+        agent_results["style"] = run_agent(
+            step_id="style_agent",
             name="style",
             log_label="Launching Style Agent",
             factory=self._style_agent_factory,
             context_builder=lambda: {"ruff_result": context.ruff_result},
-            timings=context.timings,
         )
-        agent_results["testing"] = self._launch_agent(
+        agent_results["testing"] = run_agent(
+            step_id="testing_agent",
             name="testing",
             log_label="Launching Testing Agent",
             factory=self._testing_agent_factory,
@@ -145,9 +238,9 @@ class ReviewOrchestrator:
                 "pytest_result": context.pytest_result,
                 "coverage_result": context.coverage_result,
             },
-            timings=context.timings,
         )
-        agent_results["architecture"] = self._launch_agent(
+        agent_results["architecture"] = run_agent(
+            step_id="architecture_agent",
             name="architecture",
             log_label="Launching Architecture Agent",
             factory=self._architecture_agent_factory,
@@ -156,7 +249,6 @@ class ReviewOrchestrator:
                 "git_result": context.git_result,
                 "project_path": str(context.project_path),
             },
-            timings=context.timings,
         )
 
         logger.info("Aggregating Results")

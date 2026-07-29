@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Plus, RefreshCw } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -28,13 +29,13 @@ export function DashboardHeader({
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
-        <button
-          type="button"
+        <Link
+          href="/reviews/new"
           className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-medium text-white shadow-sm shadow-blue-950/40 transition-colors hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950"
         >
           <Plus className="size-4" aria-hidden />
           New Review
-        </button>
+        </Link>
         <button
           type="button"
           className="inline-flex size-10 items-center justify-center rounded-lg border border-slate-800 bg-zinc-900 text-slate-300 transition-colors hover:border-slate-700 hover:bg-zinc-800 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"

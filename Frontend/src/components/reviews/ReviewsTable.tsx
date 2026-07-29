@@ -48,10 +48,12 @@ export function ReviewsTable({ reviews }: ReviewsTableProps) {
             Browse and compare previous AI code reviews
           </p>
         </div>
-        <Button variant="primary">
-          <Plus className="size-4" aria-hidden />
-          New Review
-        </Button>
+        <Link href="/reviews/new">
+          <Button variant="primary">
+            <Plus className="size-4" aria-hidden />
+            New Review
+          </Button>
+        </Link>
       </div>
 
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">

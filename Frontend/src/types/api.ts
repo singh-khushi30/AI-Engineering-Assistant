@@ -33,6 +33,16 @@ export type RequestConfig = {
   parseJson?: boolean;
 };
 
+/** Matches Backend LLMProvider values */
+export type ReviewProvider =
+  | "gemini"
+  | "groq"
+  | "openrouter"
+  | "ollama"
+  | "openai"
+  | "anthropic"
+  | "azure_openai";
+
 export type ReviewJobStatus =
   | "queued"
   | "running"
@@ -40,16 +50,60 @@ export type ReviewJobStatus =
   | "failed"
   | "cancelled";
 
-export type CreateReviewRequest = {
+export type ReviewStepStatus =
+  | "pending"
+  | "running"
+  | "completed"
+  | "failed"
+  | "skipped";
+
+export type StartReviewRequest = {
   project_path: string;
-  provider?: string;
-  include_git?: boolean;
-  include_bandit?: boolean;
-  include_ruff?: boolean;
-  include_pytest?: boolean;
-  include_coverage?: boolean;
-  coverage_target?: number;
-  timeout_seconds?: number;
+  provider: ReviewProvider;
+  include_git: boolean;
+  include_bandit: boolean;
+  include_ruff: boolean;
+  include_pytest: boolean;
+  include_coverage: boolean;
+  coverage_target?: number | null;
+  timeout_seconds?: number | null;
+  enable_fallback?: boolean | null;
+};
+
+export type StartReviewResponse = {
+  id: string;
+  status: ReviewJobStatus;
+  project_path: string;
+  project_name: string;
+  provider: string;
+  created_at: string;
+  message: string;
+};
+
+export type ReviewProgressStep = {
+  id: string;
+  label: string;
+  status: ReviewStepStatus;
+  detail?: string | null;
+};
+
+export type ReviewStatusResponse = {
+  id: string;
+  status: ReviewJobStatus;
+  project_path: string;
+  project_name: string;
+  provider: string;
+  current_step: string | null;
+  current_step_label: string | null;
+  message: string | null;
+  error: string | null;
+  failed_stage: string | null;
+  steps: ReviewProgressStep[];
+  created_at: string;
+  started_at: string | null;
+  updated_at: string;
+  completed_at: string | null;
+  elapsed_seconds: number | null;
 };
 
 export type ReviewSummaryResponse = {
@@ -67,6 +121,7 @@ export type ReviewSummaryResponse = {
   duration_seconds: number | null;
   created_at: string;
   completed_at: string | null;
+  error: string | null;
 };
 
 export type ReviewListResponse = {
@@ -74,6 +129,29 @@ export type ReviewListResponse = {
   total: number;
 };
 
+export type ReviewResultResponse = {
+  id: string;
+  status: ReviewJobStatus;
+  project_name: string;
+  project_path: string;
+  provider: string;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  duration_seconds: number | null;
+  error: string | null;
+  failed_stage: string | null;
+  message: string | null;
+  steps: ReviewProgressStep[];
+  request: Record<string, unknown>;
+  result: Record<string, unknown> | null;
+};
+
+/** @deprecated Use StartReviewRequest */
+export type CreateReviewRequest = StartReviewRequest;
+
+/** Legacy aliases kept for transitional imports */
+export type ReviewDetailResponse = ReviewResultResponse;
 export type ReviewFindingResponse = {
   title: string;
   detail: string;
@@ -83,40 +161,7 @@ export type ReviewFindingResponse = {
   line?: number | null;
   category?: string | null;
 };
-
-export type ReviewAgentReportResponse = {
-  agent: string;
-  summary: string;
-  findings: ReviewFindingResponse[];
-  recommendations: string[];
-  severity: string;
-  confidence: number;
-};
-
-export type ReviewDetailResponse = ReviewSummaryResponse & {
-  executive_summary?: string | null;
-  highlights?: string[];
-  agents?: ReviewAgentReportResponse[];
-  prioritized_issues?: ReviewFindingResponse[];
-  timeline?: Array<{
-    time: string;
-    label: string;
-    status: "completed" | "running" | "pending";
-  }>;
-  raw?: Record<string, unknown>;
-};
-
-export type ReviewStatusResponse = {
-  id: string;
-  status: ReviewJobStatus;
-  progress_percent?: number | null;
-  current_step?: string | null;
-  message?: string | null;
-  updated_at: string;
-};
-
 export type ReviewReportFormat = "json" | "markdown" | "html";
-
 export type ReviewReportResponse = {
   id: string;
   format: ReviewReportFormat;

@@ -37,7 +37,18 @@ class ReviewToolRunner:
         self.pytest_tool = pytest_tool or PytestTool()
         self.coverage_tool = coverage_tool or CoverageTool()
 
-    def run_all(self, context: ReviewContext) -> ReviewContext:
+    def run_all(
+        self,
+        context: ReviewContext,
+        *,
+        include_git: bool = True,
+        include_bandit: bool = True,
+        include_ruff: bool = True,
+        include_pytest: bool = True,
+        include_coverage: bool = True,
+        on_tool_start: Callable[[str], None] | None = None,
+        on_tool_end: Callable[[str, bool], None] | None = None,
+    ) -> ReviewContext:
         project = context.project_path
 
         logger.info("Loading Project path=%s", project)
@@ -50,27 +61,58 @@ class ReviewToolRunner:
             context.tool_errors.append(message)
         context.timings["project_structure"] = round(time.perf_counter() - started, 3)
 
-        self._run_tool(context, "git", "Running Git", lambda: self.git_tool.timed_run(project))
-        self._run_tool(
-            context,
-            "bandit",
-            "Running Bandit",
-            lambda: self.bandit_tool.timed_run(project),
-        )
-        self._run_tool(context, "ruff", "Running Ruff", lambda: self.ruff_tool.timed_run(project))
-        self._run_tool(
-            context,
-            "pytest",
-            "Running Pytest",
-            lambda: self.pytest_tool.timed_run(project),
-        )
-        self._run_tool(
-            context,
-            "coverage",
-            "Running Coverage",
-            lambda: self.coverage_tool.timed_run(project),
-        )
+        tool_plan: list[tuple[str, str, bool, Callable[[], Any]]] = [
+            ("git", "Running Git", include_git, lambda: self.git_tool.timed_run(project)),
+            (
+                "bandit",
+                "Running Bandit",
+                include_bandit,
+                lambda: self.bandit_tool.timed_run(project),
+            ),
+            ("ruff", "Running Ruff", include_ruff, lambda: self.ruff_tool.timed_run(project)),
+            (
+                "pytest",
+                "Running Pytest",
+                include_pytest,
+                lambda: self.pytest_tool.timed_run(project),
+            ),
+            (
+                "coverage",
+                "Running Coverage",
+                include_coverage,
+                lambda: self.coverage_tool.timed_run(project),
+            ),
+        ]
+
+        for key, label, enabled, runner in tool_plan:
+            if not enabled:
+                self._mark_skipped(context, key)
+                if on_tool_end is not None:
+                    on_tool_end(key, True)
+                continue
+            if on_tool_start is not None:
+                on_tool_start(key)
+            self._run_tool(context, key, label, runner)
+            payload = getattr(context, f"{key}_result", {}) or {}
+            ok = bool(payload.get("success", True))
+            if on_tool_end is not None:
+                on_tool_end(key, ok)
+
         return context
+
+    def _mark_skipped(self, context: ReviewContext, key: str) -> None:
+        setattr(
+            context,
+            f"{key}_result",
+            {
+                "success": True,
+                "tool": key,
+                "execution_time": 0.0,
+                "data": {"skipped": True},
+                "errors": [],
+            },
+        )
+        context.timings[key] = 0.0
 
     def _run_tool(
         self,
