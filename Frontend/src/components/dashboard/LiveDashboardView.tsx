@@ -1,7 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { Loader2, Plus, RefreshCw } from "lucide-react";
+import {
+  CloudOff,
+  FileSearch,
+  FileWarning,
+  Loader2,
+} from "lucide-react";
 
 import {
   CoverageBreakdownCard,
@@ -14,53 +19,19 @@ import {
   ReviewTimeline,
 } from "@/components/dashboard";
 import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { ErrorState, inferErrorKind } from "@/components/ui/ErrorState";
+import { DashboardSkeleton } from "@/components/ui/Skeleton";
 import { useElapsedTime } from "@/hooks/useElapsedTime";
 import { useHealth } from "@/hooks/useHealth";
 import { useLiveDashboard } from "@/hooks/useLiveDashboard";
 import { useReviewStatus } from "@/hooks/useReviewStatus";
+import { surfaces } from "@/lib/design";
 import {
   mapApiProviderToLabel,
   mapApiReviewToDashboardData,
 } from "@/lib/review-mappers";
-
-function DashboardSkeleton() {
-  return (
-    <div className="space-y-6" aria-busy="true">
-      <div className="h-10 w-64 animate-pulse rounded-lg bg-slate-800" />
-      <div className="h-40 animate-pulse rounded-xl bg-slate-800/80" />
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, index) => (
-          <div key={index} className="h-28 animate-pulse rounded-xl bg-slate-800/80" />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function EmptyDashboard({ backendOnline }: { backendOnline: boolean }) {
-  return (
-    <div className="rounded-xl border border-slate-800 bg-zinc-900/40 px-6 py-14 text-center">
-      <h2 className="text-2xl font-semibold text-slate-50">No reviews yet</h2>
-      <p className="mx-auto mt-3 max-w-xl text-sm text-slate-400">
-        Run your first multi-agent code review to see coverage, findings,
-        architecture insights, and generated reports here.
-      </p>
-      <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-        <Link href="/reviews/new">
-          <Button variant="primary">
-            <Plus className="size-4" aria-hidden />
-            Start New Review
-          </Button>
-        </Link>
-      </div>
-      <p className="mt-4 text-xs text-slate-500">
-        {backendOnline
-          ? "The backend is connected and ready."
-          : "Backend connectivity could not be confirmed."}
-      </p>
-    </div>
-  );
-}
+import { cn } from "@/lib/utils";
 
 function RunningDashboardCard({
   reviewId,
@@ -79,10 +50,7 @@ function RunningDashboardCard({
   });
 
   return (
-    <section
-      className="rounded-xl border border-blue-900/40 bg-blue-950/20 p-6"
-      aria-live="polite"
-    >
+    <section className={cn(surfaces.alertInfo)} aria-live="polite">
       <h2 className="text-xl font-semibold text-slate-50">{projectName}</h2>
       <p className="mt-1 break-all font-mono text-xs text-slate-500">{projectPath}</p>
       <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -117,7 +85,7 @@ function RunningDashboardCard({
         aria-label="Review progress"
         aria-valuetext={data?.current_step_label ?? "In progress"}
       >
-        <div className="h-full w-1/3 animate-pulse rounded-full bg-blue-600" />
+        <div className="h-full w-1/3 animate-pulse rounded-full bg-blue-600 transition-all duration-300" />
       </div>
       <div className="mt-5">
         <Link href={`/reviews/${reviewId}/running`}>
@@ -145,16 +113,22 @@ export function LiveDashboardView() {
     return (
       <div className="space-y-6">
         <DashboardHeader />
-        <div className="rounded-xl border border-amber-900/40 bg-amber-950/20 p-6">
-          <h2 className="text-xl font-semibold text-slate-50">Backend offline</h2>
-          <p className="mt-2 text-sm text-amber-100">
-            Start the FastAPI server to load live review data.
-          </p>
-          <Button className="mt-4" variant="secondary" onClick={refetchAll}>
-            <RefreshCw className="size-4" aria-hidden />
-            Retry
-          </Button>
-        </div>
+        <EmptyState
+          icon={CloudOff}
+          title="Backend offline"
+          description="Start the FastAPI server to load live review data on the dashboard."
+          tone="warning"
+          primaryAction={{
+            label: "Retry connection",
+            onClick: refetchAll,
+            variant: "secondary",
+          }}
+          secondaryAction={{
+            label: "Start New Review",
+            href: "/reviews/new",
+            variant: "primary",
+          }}
+        />
       </div>
     );
   }
@@ -172,14 +146,17 @@ export function LiveDashboardView() {
     return (
       <div className="space-y-6">
         <DashboardHeader />
-        <div className="rounded-xl border border-red-900/40 bg-red-950/20 p-6">
-          <h2 className="text-xl font-semibold text-slate-50">Unable to load reviews</h2>
-          <p className="mt-2 text-sm text-red-300">{listError}</p>
-          <Button className="mt-4" variant="primary" onClick={refetchAll}>
-            <RefreshCw className="size-4" aria-hidden />
-            Retry
-          </Button>
-        </div>
+        <ErrorState
+          kind={inferErrorKind(listError)}
+          title="Unable to load reviews"
+          description={listError ?? undefined}
+          onRetry={refetchAll}
+          secondaryAction={
+            <Link href="/reviews/new">
+              <Button variant="secondary">New Review</Button>
+            </Link>
+          }
+        />
       </div>
     );
   }
@@ -188,7 +165,26 @@ export function LiveDashboardView() {
     return (
       <div className="space-y-6">
         <DashboardHeader />
-        <EmptyDashboard backendOnline={isOnline} />
+        <EmptyState
+          icon={FileSearch}
+          title="No reviews yet"
+          description="Run your first multi-agent code review to see coverage, findings, architecture insights, and generated reports here."
+          primaryAction={{
+            label: "Start New Review",
+            href: "/reviews/new",
+            variant: "primary",
+          }}
+          secondaryAction={{
+            label: "Open Reviews",
+            href: "/reviews",
+          }}
+        >
+          <p className="mx-auto mt-4 max-w-md text-xs text-slate-500">
+            {isOnline
+              ? "The backend is connected and ready."
+              : "Backend connectivity could not be confirmed."}
+          </p>
+        </EmptyState>
       </div>
     );
   }
@@ -216,20 +212,20 @@ export function LiveDashboardView() {
     return (
       <div className="space-y-6">
         <DashboardHeader />
-        <div className="rounded-xl border border-slate-800 bg-zinc-900/40 p-6">
-          <h2 className="text-xl font-semibold text-slate-50">No completed reviews yet</h2>
-          <p className="mt-2 text-sm text-slate-400">
-            Recent reviews failed or were cancelled. Start a new review to populate the dashboard.
-          </p>
-          <div className="mt-4 flex flex-wrap gap-3">
-            <Link href="/reviews/new">
-              <Button variant="primary">Start New Review</Button>
-            </Link>
-            <Link href="/reviews">
-              <Button variant="secondary">View Reviews</Button>
-            </Link>
-          </div>
-        </div>
+        <EmptyState
+          icon={FileWarning}
+          title="No completed reviews yet"
+          description="Recent reviews failed or were cancelled. Start a new review to populate the dashboard."
+          primaryAction={{
+            label: "Start New Review",
+            href: "/reviews/new",
+            variant: "primary",
+          }}
+          secondaryAction={{
+            label: "View Reviews",
+            href: "/reviews",
+          }}
+        />
       </div>
     );
   }
@@ -239,15 +235,14 @@ export function LiveDashboardView() {
       <div className="space-y-6">
         <DashboardHeader />
         {resultError ? (
-          <div className="rounded-xl border border-red-900/40 bg-red-950/20 p-6">
-            <h2 className="text-xl font-semibold text-slate-50">Unable to load review</h2>
-            <p className="mt-2 text-sm text-red-300">{resultError}</p>
-            <Button className="mt-4" variant="primary" onClick={refetchAll}>
-              Retry
-            </Button>
-          </div>
+          <ErrorState
+            kind={inferErrorKind(resultError)}
+            title="Unable to load review"
+            description={resultError}
+            onRetry={refetchAll}
+          />
         ) : (
-          <div className="flex items-center gap-2 text-sm text-slate-400">
+          <div className="flex items-center gap-2 text-sm text-slate-400" role="status">
             <Loader2 className="size-4 animate-spin" aria-hidden />
             Loading latest review…
           </div>
@@ -282,7 +277,11 @@ export function LiveDashboardView() {
         className="grid grid-cols-1 gap-6 xl:grid-cols-2"
       >
         <ExecutiveSummaryCard data={data.executiveSummary} />
-        <ReviewTimeline steps={data.timeline} />
+        <ReviewTimeline
+          steps={data.timeline}
+          unavailable={data.timelineUnavailable}
+          unavailableReason={data.timelineUnavailableReason}
+        />
       </section>
 
       <section

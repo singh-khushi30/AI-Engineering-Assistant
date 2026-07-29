@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { surfaces } from "@/lib/design";
 import { cn } from "@/lib/utils";
 
 type SettingsSectionProps = {
@@ -16,12 +17,7 @@ export function SettingsSection({
   className,
 }: SettingsSectionProps) {
   return (
-    <section
-      className={cn(
-        "rounded-xl border border-slate-800 bg-zinc-900/50 p-5 shadow-sm shadow-black/20 sm:p-6",
-        className,
-      )}
-    >
+    <section className={cn(surfaces.card, className)}>
       <h2 className="text-base font-semibold text-slate-50">{title}</h2>
       {description ? (
         <p className="mt-1 text-sm text-slate-500">{description}</p>

@@ -1,3 +1,5 @@
+import { getProviderLabel } from "@/constants/providers";
+import { mapApiCoverage, mapApiTimeline } from "@/lib/coverage-timeline";
 import type {
   ReviewJobStatus,
   ReviewProgressStep,
@@ -5,7 +7,6 @@ import type {
   ReviewSummaryResponse,
 } from "@/types/api";
 import type {
-  CoverageBreakdown,
   DashboardMockData,
   ExecutiveSummary,
   PrioritizedIssue,
@@ -25,14 +26,19 @@ import type {
 import type { ReportFormat, ReportItem } from "@/types/report";
 
 const PROVIDER_LABELS: Record<string, string> = {
-  gemini: "Gemini",
-  groq: "Groq",
-  openrouter: "OpenRouter",
-  ollama: "Ollama",
   openai: "OpenAI",
   anthropic: "Anthropic",
   azure_openai: "Azure OpenAI",
 };
+
+export function mapApiProviderToLabel(provider: string): string {
+  const key = provider.trim().toLowerCase();
+  const known = getProviderLabel(key);
+  if (known !== key) {
+    return known;
+  }
+  return PROVIDER_LABELS[key] ?? provider;
+}
 
 const SECRET_KEY_PATTERN =
   /(api[_-]?key|apikey|authorization|password|secret|token|credential|private[_-]?key)/i;
@@ -66,11 +72,6 @@ export function asNumber(value: unknown): number | null {
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
-}
-
-export function mapApiProviderToLabel(provider: string): string {
-  const key = provider.trim().toLowerCase();
-  return PROVIDER_LABELS[key] ?? provider;
 }
 
 export function mapApiSeverityToUiSeverity(value: unknown): SeverityLevel {
@@ -139,17 +140,28 @@ export function formatDateLabel(iso: string | null | undefined): string {
 export function extractCoveragePercent(
   result: Record<string, unknown> | null,
 ): number | null {
-  if (!result) {
-    return null;
-  }
-  const aggregated = asRecord(result.aggregated_review);
-  const tools = asRecord(aggregated.tools);
-  const coverage = asRecord(asRecord(tools.coverage).data);
-  return (
-    asNumber(coverage.total_coverage) ??
-    asNumber(coverage.percent_covered) ??
-    asNumber(coverage.coverage_percent)
+  return mapApiCoverage(result).overallPercent;
+}
+
+export function mapStepsToTimeline(
+  steps: ReviewProgressStep[],
+  startedAt: string | null,
+  payload?: Pick<
+    ReviewResultResponse,
+    "started_at" | "completed_at" | "created_at" | "result" | "status"
+  >,
+): TimelineStep[] {
+  const mapped = mapApiTimeline(
+    steps,
+    payload ?? {
+      started_at: startedAt,
+      completed_at: null,
+      created_at: startedAt ?? "",
+      result: null,
+      status: "completed",
+    },
   );
+  return mapped.steps;
 }
 
 export function extractTestCounts(result: Record<string, unknown> | null): {
@@ -237,41 +249,6 @@ export function extractFindingGroups(
     label: source.label,
     findings: extractFindingsFromAgentPayload(source.payload, source.category),
   }));
-}
-
-export function mapStepsToTimeline(
-  steps: ReviewProgressStep[],
-  startedAt: string | null,
-): TimelineStep[] {
-  return steps
-    .filter((step) => step.status !== "skipped")
-    .map((step, index) => {
-      const base = startedAt ? new Date(startedAt).getTime() : NaN;
-      const time = Number.isFinite(base)
-        ? new Date(base + index * 1000).toLocaleTimeString("en-GB", {
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-            hour12: false,
-          })
-        : "—";
-
-      let status: TimelineStep["status"] = "pending";
-      if (step.status === "completed") {
-        status = "completed";
-      } else if (step.status === "running") {
-        status = "running";
-      } else if (step.status === "failed") {
-        status = "completed";
-      }
-
-      return {
-        id: step.id,
-        time,
-        label: step.label,
-        status,
-      };
-    });
 }
 
 export function mapApiSummaryToReviewListItem(
@@ -423,7 +400,7 @@ export function mapApiReviewToReviewDetail(
     highlights: themes,
     agentResults,
     prioritizedIssues,
-    timeline: mapStepsToTimeline(payload.steps, payload.started_at),
+    timeline: mapStepsToTimeline(payload.steps, payload.started_at, payload),
     findingGroups,
     rawJson: redactSensitiveJson(raw) as Record<string, unknown>,
   };
@@ -449,13 +426,8 @@ export function mapApiReviewToDashboardData(
   const result = payload.result ? asRecord(payload.result) : null;
   const report = asRecord(result?.report);
   const scores = asRecord(report.category_scores);
-  const tools = asRecord(asRecord(result?.aggregated_review).tools);
-  const coverageData = asRecord(asRecord(tools.coverage).data);
-  const coveredLines = asNumber(coverageData.covered_lines) ?? asNumber(coverageData.num_statements);
-  const totalLines = asNumber(coverageData.num_statements) ?? asNumber(coverageData.total_lines);
-  const modulesRaw = asArray(coverageData.files).length
-    ? asArray(coverageData.files)
-    : asArray(coverageData.modules);
+  const coverage = mapApiCoverage(result);
+  const timelineMapped = mapApiTimeline(payload.steps, payload);
 
   const overview: ReviewOverview = {
     projectName: detail.projectName,
@@ -464,7 +436,7 @@ export function mapApiReviewToDashboardData(
     provider: detail.provider,
     durationLabel: detail.durationLabel,
     completedAt: detail.completedAt,
-    coveragePercent: detail.coveragePercent,
+    coveragePercent: coverage.overallPercent ?? detail.coveragePercent,
     status: detail.status,
   };
 
@@ -495,26 +467,6 @@ export function mapApiReviewToDashboardData(
     highlights: detail.highlights,
   };
 
-  const coverage: CoverageBreakdown = {
-    overallPercent: detail.coveragePercent,
-    coveredLines: coveredLines,
-    totalLines: totalLines,
-    available: detail.coveragePercent !== null,
-    modules: modulesRaw.slice(0, 6).map((item, index) => {
-      const entry = asRecord(item);
-      const percent =
-        asNumber(entry.percent_covered) ??
-        asNumber(entry.coverage) ??
-        asNumber(entry.percent) ??
-        0;
-      return {
-        id: `mod-${index}`,
-        name: asString(entry.file ?? entry.name ?? entry.path, `Module ${index + 1}`),
-        percent,
-      };
-    }),
-  };
-
   const prioritizedIssues: PrioritizedIssue[] = detail.prioritizedIssues;
 
   const artifacts = asRecord(result?.artifacts);
@@ -531,10 +483,12 @@ export function mapApiReviewToDashboardData(
     overview,
     summaryCards,
     executiveSummary,
-    timeline: detail.timeline,
+    timeline: timelineMapped.steps.length ? timelineMapped.steps : detail.timeline,
     coverage,
     prioritizedIssues,
     reports,
+    timelineUnavailable: timelineMapped.unavailable,
+    timelineUnavailableReason: timelineMapped.reason,
   };
 }
 

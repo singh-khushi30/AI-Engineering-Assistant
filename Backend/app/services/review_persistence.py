@@ -21,6 +21,12 @@ from pathlib import Path
 from typing import Any
 
 from app.core.config import get_settings
+from app.services.review_history import (
+    attach_coverage_summary_to_result,
+    resolve_steps_for_record,
+    synthesize_steps_from_timings,
+    synthesize_boundary_steps,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -109,27 +115,6 @@ class ReviewPersistence:
             tmp.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
             tmp.replace(self.index_path)
 
-    def load_review(self, review_id: str) -> dict[str, Any] | None:
-        path = self.review_path(review_id)
-        if not path.exists():
-            # Fallback: scan for exact id field if filename was sanitized differently.
-            for candidate in self.data_dir.glob("*.json"):
-                if candidate.name == "index.json":
-                    continue
-                try:
-                    payload = json.loads(candidate.read_text(encoding="utf-8"))
-                except (OSError, json.JSONDecodeError):
-                    continue
-                if isinstance(payload, dict) and payload.get("id") == review_id:
-                    return payload
-            return None
-        try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
-            logger.warning("Failed to read review %s: %s", review_id, exc)
-            return None
-        return payload if isinstance(payload, dict) else None
-
     def list_review_records(self) -> list[dict[str, Any]]:
         """Load full persisted records (completed/failed/cancelled)."""
         self.ensure_dirs()
@@ -143,8 +128,42 @@ class ReviewPersistence:
                 logger.warning("Skipping corrupt review file %s: %s", path, exc)
                 continue
             if isinstance(payload, dict) and payload.get("id"):
-                records.append(payload)
+                records.append(self._enrich_record(payload))
         return records
+
+    def load_review(self, review_id: str) -> dict[str, Any] | None:
+        path = self.review_path(review_id)
+        if not path.exists():
+            # Fallback: scan for exact id field if filename was sanitized differently.
+            for candidate in self.data_dir.glob("*.json"):
+                if candidate.name == "index.json":
+                    continue
+                try:
+                    payload = json.loads(candidate.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    continue
+                if isinstance(payload, dict) and payload.get("id") == review_id:
+                    return self._enrich_record(payload)
+            return None
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            logger.warning("Failed to read review %s: %s", review_id, exc)
+            return None
+        return self._enrich_record(payload) if isinstance(payload, dict) else None
+
+    def _enrich_record(self, record: dict[str, Any]) -> dict[str, Any]:
+        """Fill missing steps/coverage for historical imports without inventing data."""
+        enriched = dict(record)
+        steps = resolve_steps_for_record(enriched)
+        if steps and not (isinstance(record.get("steps"), list) and record["steps"]):
+            enriched["steps"] = steps
+        result = attach_coverage_summary_to_result(
+            enriched.get("result") if isinstance(enriched.get("result"), dict) else None
+        )
+        if result is not None:
+            enriched["result"] = result
+        return enriched
 
     def save_review(self, record: dict[str, Any]) -> Path:
         """Persist one review record and refresh index entry."""
@@ -347,6 +366,42 @@ def report_document_to_persisted_record(
     duration = meta.get("execution_duration")
     duration_f = float(duration) if isinstance(duration, (int, float)) else None
 
+    timings = appendix.get("timings") if isinstance(appendix.get("timings"), dict) else {}
+    steps = synthesize_steps_from_timings(timings)
+    if not steps:
+        steps = synthesize_boundary_steps(
+            started_at=completed_at,
+            completed_at=completed_at,
+        )
+
+    result_payload = {
+        "success": True,
+        "execution_time": duration_f,
+        "aggregated_review": aggregated,
+        "intelligence": {
+            "summary": {
+                "executive_summary": report.get("executive_summary"),
+                "themes": report.get("themes") or [],
+                "prioritized_issues": report.get("top_issues") or [],
+            },
+            "intelligence": {
+                "health_scores": {
+                    "overall": report.get("overall_health"),
+                    **(report.get("category_scores") or {}),
+                },
+                "priority_distribution": report.get("priority_distribution") or {},
+                "category_issue_counts": report.get("category_issue_counts") or {},
+                "top_issues": report.get("top_issues") or [],
+            },
+            "recommendations": report.get("recommendations") or [],
+        },
+        "report": report,
+        "artifacts": artifacts,
+        "errors": list(report.get("errors") or []),
+        "output_dir": str(source_path.parent),
+    }
+    result_payload = attach_coverage_summary_to_result(result_payload) or result_payload
+
     return {
         "id": review_id,
         "status": "completed",
@@ -360,38 +415,13 @@ def report_document_to_persisted_record(
         "error": None,
         "failed_stage": None,
         "message": "Imported from saved report",
-        "steps": [],
+        "steps": steps,
         "request": {
             "project_path": project_path,
             "provider": provider,
             "imported": True,
         },
-        "result": {
-            "success": True,
-            "execution_time": duration_f,
-            "aggregated_review": aggregated,
-            "intelligence": {
-                "summary": {
-                    "executive_summary": report.get("executive_summary"),
-                    "themes": report.get("themes") or [],
-                    "prioritized_issues": report.get("top_issues") or [],
-                },
-                "intelligence": {
-                    "health_scores": {
-                        "overall": report.get("overall_health"),
-                        **(report.get("category_scores") or {}),
-                    },
-                    "priority_distribution": report.get("priority_distribution") or {},
-                    "category_issue_counts": report.get("category_issue_counts") or {},
-                    "top_issues": report.get("top_issues") or [],
-                },
-                "recommendations": report.get("recommendations") or [],
-            },
-            "report": report,
-            "artifacts": artifacts,
-            "errors": list(report.get("errors") or []),
-            "output_dir": str(source_path.parent),
-        },
+        "result": result_payload,
         "source": "imported_report",
         "source_report": source_report,
     }

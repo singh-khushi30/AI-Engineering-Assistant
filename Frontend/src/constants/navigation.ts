@@ -79,7 +79,6 @@ export const NAV_ITEMS: NavItem[] = [
 
 export const APP_NAME = "AI Engineering Assistant";
 export const APP_TAGLINE = "Multi-Agent Code Review";
-export const DEFAULT_PROVIDER = "Gemini";
 
 export function isNavItemActive(pathname: string, href: string): boolean {
   if (href === "/dashboard") {

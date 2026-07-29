@@ -13,8 +13,43 @@ body {
 }
 
 :root {
-  --background: #09090b;
-  --foreground: #fafafa;
+  /* Soft dark — avoid pure black */
+  --background: #0c0c0f;
+  --foreground: #f4f4f5;
+  --surface: #18181b;
+  --surface-raised: #1c1c21;
+  --border: #27272a;
+  --border-soft: #3f3f46;
+  --muted: #a1a1aa;
+  --accent: #2563eb;
+  --accent-hover: #3b82f6;
+  --ring: #3b82f6;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 0.75rem;
+  --space-page-x: 1rem;
+  --space-page-y: 1rem;
+  --space-section: 1.5rem;
+  --space-card: 1.25rem;
+  --icon-sm: 0.875rem;
+  --icon-md: 1rem;
+  --icon-lg: 1.25rem;
+  --transition-fast: 150ms ease;
+  --transition-normal: 200ms ease;
+}
+
+@media (min-width: 640px) {
+  :root {
+    --space-page-x: 1.5rem;
+    --space-page-y: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --space-page-x: 2rem;
+    --space-page-y: 2rem;
+  }
 }
 
 @theme inline {
@@ -24,9 +59,77 @@ body {
   --font-mono: var(--font-geist-mono);
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 body {
   min-height: 100vh;
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Subtle scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #3f3f46 transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #52525b;
+  background-clip: content-box;
+}
+
+/* Skip link */
+.skip-to-content {
+  position: absolute;
+  left: 1rem;
+  top: -100%;
+  z-index: 100;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: white;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: top var(--transition-fast);
+}
+
+.skip-to-content:focus {
+  top: 1rem;
+  outline: 2px solid white;
+  outline-offset: 2px;
 }

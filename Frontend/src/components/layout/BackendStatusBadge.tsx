@@ -1,8 +1,10 @@
 "use client";
 
-import { RefreshCw } from "lucide-react";
+import { Circle, Loader2, RefreshCw } from "lucide-react";
 
+import { NavbarStatusSkeleton } from "@/components/ui/Skeleton";
 import { useHealth } from "@/hooks/useHealth";
+import { focusRing } from "@/lib/design";
 import { cn } from "@/lib/utils";
 
 type BackendStatusBadgeProps = {
@@ -18,15 +20,16 @@ export function BackendStatusBadge({ className }: BackendStatusBadgeProps) {
     pollIntervalMs: 30_000,
   });
 
+  if (status === "checking" && !health) {
+    return <NavbarStatusSkeleton className={className} />;
+  }
+
   const label =
     status === "online"
       ? "Backend Online"
       : status === "checking"
         ? "Checking Backend"
         : "Backend Offline";
-
-  const indicator =
-    status === "online" ? "🟢" : status === "checking" ? "🟡" : "🔴";
 
   const title =
     status === "online"
@@ -36,7 +39,7 @@ export function BackendStatusBadge({ className }: BackendStatusBadgeProps) {
   return (
     <div
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium sm:text-sm",
+        "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors duration-150 sm:text-sm",
         status === "online" &&
           "border-emerald-900/60 bg-emerald-950/40 text-emerald-300",
         status === "offline" &&
@@ -49,7 +52,17 @@ export function BackendStatusBadge({ className }: BackendStatusBadgeProps) {
       role="status"
       aria-live="polite"
     >
-      <span aria-hidden>{indicator}</span>
+      {status === "checking" ? (
+        <Loader2 className="size-3.5 animate-spin" aria-hidden />
+      ) : (
+        <Circle
+          className={cn(
+            "size-2.5 fill-current",
+            status === "online" ? "text-emerald-400" : "text-red-400",
+          )}
+          aria-hidden
+        />
+      )}
       <span className="hidden sm:inline">{label}</span>
       <span className="sm:hidden">
         {status === "online" ? "Online" : status === "checking" ? "…" : "Offline"}
@@ -60,7 +73,10 @@ export function BackendStatusBadge({ className }: BackendStatusBadgeProps) {
           type="button"
           onClick={retry}
           disabled={isLoading}
-          className="ml-0.5 inline-flex size-6 items-center justify-center rounded-md text-red-200 transition-colors hover:bg-red-900/40 hover:text-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50"
+          className={cn(
+            "ml-0.5 inline-flex size-7 items-center justify-center rounded-md text-red-200 transition-colors duration-150 hover:bg-red-900/40 hover:text-red-50 disabled:opacity-50",
+            focusRing,
+          )}
           aria-label="Retry backend connection"
         >
           <RefreshCw

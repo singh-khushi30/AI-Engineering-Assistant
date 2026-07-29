@@ -63,7 +63,7 @@ export type ReviewDetail = {
     id: string;
     time: string;
     label: string;
-    status: "completed" | "running" | "pending";
+    status: "completed" | "running" | "pending" | "failed";
   }>;
   findingGroups: ReviewFindingGroup[];
   rawJson: Record<string, unknown>;

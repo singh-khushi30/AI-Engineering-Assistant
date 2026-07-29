@@ -1,5 +1,6 @@
 import type { SelectHTMLAttributes } from "react";
 
+import { focusRing } from "@/lib/design";
 import { cn } from "@/lib/utils";
 
 type SelectOption = {
@@ -23,7 +24,8 @@ export function Select({ label, id, options, className, ...props }: SelectProps)
       <select
         id={selectId}
         className={cn(
-          "w-full rounded-lg border border-slate-800 bg-zinc-950 px-3 py-2 text-sm text-slate-100 outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30",
+          "min-h-10 w-full rounded-lg border border-slate-800 bg-zinc-950 px-3 py-2 text-sm text-slate-100 outline-none transition-colors duration-150 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30",
+          focusRing,
           className,
         )}
         {...props}

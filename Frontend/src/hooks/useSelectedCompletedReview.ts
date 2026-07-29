@@ -11,7 +11,7 @@ import type { ReviewResultResponse } from "@/types/api";
 export function useSelectedCompletedReview(explicitReviewId?: string | null) {
   const searchParams = useSearchParams();
   const queryId = searchParams.get("reviewId");
-  const list = useReviewList({ refetchOnFocus: true });
+  const list = useReviewList({ refetchOnFocus: false });
 
   const targetId = useMemo(() => {
     if (explicitReviewId) {

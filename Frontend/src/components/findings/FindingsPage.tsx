@@ -1,12 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { SearchX } from "lucide-react";
 
 import { ProgressBar } from "@/components/dashboard/ProgressBar";
 import { SeverityBadge } from "@/components/dashboard/SeverityBadge";
 import { FindingCard } from "@/components/findings/FindingCard";
 import { FindingsEmptyState } from "@/components/findings/FindingsEmptyState";
 import { FindingsFilters } from "@/components/findings/FindingsFilters";
+import { EmptyState } from "@/components/ui/EmptyState";
 import type { FindingsPageData } from "@/types/finding";
 import type { SeverityLevel } from "@/types/dashboard";
 
@@ -132,9 +134,20 @@ export function FindingsPage({ data }: FindingsPageProps) {
           scanSummary={data.scanSummary}
         />
       ) : filtered.length === 0 ? (
-        <p className="rounded-xl border border-slate-800 bg-zinc-900/40 px-4 py-8 text-center text-sm text-slate-500">
-          No findings match your filters.
-        </p>
+        <EmptyState
+          icon={SearchX}
+          title="No search results"
+          description="No findings match your filters or search. Try clearing filters or adjusting the query."
+          primaryAction={{
+            label: "Clear filters",
+            onClick: () => {
+              setFilter("all");
+              setQuery("");
+            },
+            variant: "secondary",
+          }}
+          className="py-10 sm:py-12"
+        />
       ) : (
         <div className="space-y-3">
           {filtered.map((finding) => (

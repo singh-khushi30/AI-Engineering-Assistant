@@ -31,6 +31,7 @@ from app.services.review_persistence import (
     job_to_persisted_record,
     parse_persisted_datetime,
 )
+from app.services.review_history import attach_coverage_summary_to_result
 from reports.builder import ReportBuilder
 from reports.exporter import ReportExporter
 
@@ -321,7 +322,7 @@ class ReviewJobManager:
                 message=job.message,
                 steps=[step.model_copy(deep=True) for step in job.steps],
                 request=job.request.model_dump(),
-                result=job.result,
+                result=attach_coverage_summary_to_result(job.result),
             )
 
     def _run_job(self, job_id: str) -> None:
@@ -596,7 +597,7 @@ class ReviewJobManager:
             message=job.message,
             steps=[step.model_dump() for step in job.steps],
             request=job.request.model_dump(),
-            result=job.result,
+            result=attach_coverage_summary_to_result(job.result),
         )
         try:
             self.persistence.save_review(record)

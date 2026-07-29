@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Plus, RefreshCw } from "lucide-react";
 
+import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 
 type DashboardHeaderProps = {
@@ -33,26 +34,25 @@ export function DashboardHeader({
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
-        <Link
-          href="/reviews/new"
-          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-medium text-white shadow-sm shadow-blue-950/40 transition-colors hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950"
-        >
-          <Plus className="size-4" aria-hidden />
-          New Review
+        <Link href="/reviews/new">
+          <Button variant="primary">
+            <Plus className="size-4" aria-hidden />
+            New Review
+          </Button>
         </Link>
-        <button
-          type="button"
+        <Button
+          variant="secondary"
           onClick={onRefresh}
           disabled={!onRefresh || refreshing}
-          className="inline-flex size-10 items-center justify-center rounded-lg border border-slate-800 bg-zinc-900 text-slate-300 transition-colors hover:border-slate-700 hover:bg-zinc-800 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
           aria-label="Refresh dashboard"
           aria-busy={refreshing}
+          className="size-10 px-0"
         >
           <RefreshCw
             className={cn("size-4", refreshing && "animate-spin")}
             aria-hidden
           />
-        </button>
+        </Button>
       </div>
     </div>
   );

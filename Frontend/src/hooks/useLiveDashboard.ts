@@ -32,7 +32,7 @@ export type UseLiveDashboardResult = {
 };
 
 export function useLiveDashboard(): UseLiveDashboardResult {
-  const list = useReviewList({ refetchOnFocus: true });
+  const list = useReviewList({ refetchOnFocus: false });
   const latestCompleted = useMemo(
     () => pickLatestCompleted(list.items),
     [list.items],

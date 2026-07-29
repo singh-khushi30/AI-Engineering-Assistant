@@ -57,7 +57,9 @@ export function CoverageBreakdownCard({
         </div>
       ) : (
         <p className="mt-5 rounded-lg border border-slate-800 bg-zinc-950/50 px-3 py-4 text-sm text-slate-500">
-          No module coverage breakdown was returned.
+          {available
+            ? "Overall coverage is available, but no file-level breakdown was returned for this review."
+            : "No coverage breakdown was returned for this review."}
         </p>
       )}
 

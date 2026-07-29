@@ -16,21 +16,20 @@ import { Toggle } from "@/components/settings/Toggle";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { useToast } from "@/components/ui/Toast";
+import { getProviderOptions } from "@/constants/providers";
+import { useDefaultProvider } from "@/hooks/useDefaultProvider";
 import { useHealth } from "@/hooks/useHealth";
 import { useStartReview } from "@/hooks/useStartReview";
+import { surfaces } from "@/lib/design";
 import { loadReviewFormDraft, saveReviewFormDraft } from "@/lib/session-reviews";
+import { cn } from "@/lib/utils";
 import type { ReviewProvider, StartReviewRequest } from "@/types/api";
 
-const PROVIDER_OPTIONS: Array<{ value: ReviewProvider; label: string }> = [
-  { value: "gemini", label: "Gemini" },
-  { value: "groq", label: "Groq" },
-  { value: "openrouter", label: "OpenRouter" },
-  { value: "ollama", label: "Ollama" },
-];
+const PROVIDER_OPTIONS = getProviderOptions();
 
-const DEFAULT_FORM: StartReviewRequest = {
+const DEFAULT_FORM_BASE: Omit<StartReviewRequest, "provider"> = {
   project_path: "",
-  provider: "gemini",
   include_git: true,
   include_bandit: true,
   include_ruff: true,
@@ -52,25 +51,51 @@ function subscribeDraft() {
   return () => {};
 }
 
-function readDraftForm(): StartReviewRequest {
+function readDraftFields(): Omit<StartReviewRequest, "provider"> | null {
   const draft = loadReviewFormDraft();
-  return draft ? { ...DEFAULT_FORM, ...draft } : DEFAULT_FORM;
+  if (!draft) {
+    return null;
+  }
+  // Provider for new reviews comes from the navbar default, not the draft.
+  return {
+    project_path: draft.project_path,
+    include_git: draft.include_git,
+    include_bandit: draft.include_bandit,
+    include_ruff: draft.include_ruff,
+    include_pytest: draft.include_pytest,
+    include_coverage: draft.include_coverage,
+    coverage_target: draft.coverage_target,
+    timeout_seconds: draft.timeout_seconds,
+    enable_fallback: draft.enable_fallback,
+  };
 }
 
 export function NewReviewForm() {
   const router = useRouter();
   const formId = useId();
   const pathRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
+  const { provider: defaultProvider } = useDefaultProvider();
   const { isOnline, isLoading: healthLoading, retry: retryHealth } = useHealth({
     pollIntervalMs: 30_000,
   });
   const { startReview, isSubmitting, error, clearError } = useStartReview();
 
-  const storedForm = useSyncExternalStore(
+  const draftFields = useSyncExternalStore(
     subscribeDraft,
-    readDraftForm,
-    () => DEFAULT_FORM,
+    readDraftFields,
+    () => null,
   );
+
+  const storedForm = useMemo<StartReviewRequest>(
+    () => ({
+      ...DEFAULT_FORM_BASE,
+      ...(draftFields ?? {}),
+      provider: defaultProvider,
+    }),
+    [draftFields, defaultProvider],
+  );
+
   const [formOverride, setFormOverride] = useState<StartReviewRequest | null>(null);
   const form = formOverride ?? storedForm;
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -91,7 +116,10 @@ export function NewReviewForm() {
     value: StartReviewRequest[K],
   ) {
     clearError();
-    setFormOverride((previous) => ({ ...(previous ?? storedForm), [key]: value }));
+    setFormOverride((previous) => ({
+      ...(previous ?? storedForm),
+      [key]: value,
+    }));
     setFieldErrors((previous) => ({ ...previous, [key]: undefined }));
   }
 
@@ -138,9 +166,19 @@ export function NewReviewForm() {
     saveReviewFormDraft(payload);
     const response = await startReview(payload);
     if (!response) {
+      toast({
+        title: "Could not start review",
+        description: "Check the form errors and try again.",
+        tone: "error",
+      });
       return;
     }
 
+    toast({
+      title: "Review started",
+      description: "Agents are running. Tracking live progress…",
+      tone: "success",
+    });
     router.push(`/reviews/${response.id}/running`);
   }
 
@@ -176,7 +214,7 @@ export function NewReviewForm() {
 
       <form
         onSubmit={onSubmit}
-        className="space-y-6 rounded-xl border border-slate-800 bg-zinc-900/40 p-5 sm:p-6"
+        className={cn(surfaces.panel, "space-y-6")}
         noValidate
         aria-describedby={error ? formErrorId : undefined}
       >
@@ -331,17 +369,18 @@ export function NewReviewForm() {
         ) : null}
 
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <Link
-            href="/reviews"
-            className="inline-flex items-center justify-center rounded-lg px-3.5 py-2 text-sm font-medium text-slate-400 transition-colors hover:bg-zinc-900 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-          >
-            Back to Reviews
+          <Link href="/reviews">
+            <Button variant="ghost" className="w-full sm:w-auto" disabled={isSubmitting}>
+              Back to Reviews
+            </Button>
           </Link>
           <Button
             type="submit"
             variant="primary"
+            size="lg"
             disabled={!canSubmit}
             aria-busy={isSubmitting}
+            className="w-full sm:w-auto"
           >
             {isSubmitting ? (
               <>

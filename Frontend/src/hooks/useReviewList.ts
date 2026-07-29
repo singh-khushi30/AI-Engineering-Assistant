@@ -6,6 +6,7 @@ import { ApiError } from "@/lib/http";
 import {
   fetchReviewListCached,
   invalidateLiveReviewCache,
+  peekReviewListCache,
 } from "@/lib/live-review-cache";
 import {
   sanitizeApiErrorMessage,
@@ -22,6 +23,17 @@ export type UseReviewListResult = {
   refetch: (options?: { force?: boolean }) => void;
 };
 
+function isAbortError(error: unknown): boolean {
+  if (error instanceof DOMException && error.name === "AbortError") {
+    return true;
+  }
+  if (error instanceof ApiError) {
+    const message = error.message.toLowerCase();
+    return message.includes("cancelled") || message.includes("aborted");
+  }
+  return false;
+}
+
 function toErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
     return sanitizeApiErrorMessage(error.message);
@@ -32,20 +44,29 @@ function toErrorMessage(error: unknown): string {
   return "Unable to load reviews.";
 }
 
+function normalizeList(result: ReviewListResponse): ReviewListResponse {
+  return {
+    items: sortSummariesNewestFirst(result.items),
+    total: result.total,
+  };
+}
+
 export function useReviewList(options?: {
   enabled?: boolean;
   refetchOnFocus?: boolean;
 }): UseReviewListResult {
   const enabled = options?.enabled ?? true;
-  const refetchOnFocus = options?.refetchOnFocus ?? true;
+  const refetchOnFocus = options?.refetchOnFocus ?? false;
 
-  const [data, setData] = useState<ReviewListResponse | null>(null);
+  const initial = enabled ? peekReviewListCache() : null;
+  const [data, setData] = useState<ReviewListResponse | null>(
+    initial ? normalizeList(initial) : null,
+  );
   const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(enabled);
+  const [isLoading, setIsLoading] = useState(() => enabled && !initial);
   const [retryToken, setRetryToken] = useState(0);
   const forceRef = useRef(false);
   const requestIdRef = useRef(0);
-  const inFlightRef = useRef(false);
 
   const refetch = useCallback((opts?: { force?: boolean }) => {
     if (opts?.force) {
@@ -64,31 +85,32 @@ export function useReviewList(options?: {
     const controller = new AbortController();
     const force = forceRef.current;
     forceRef.current = false;
+    const hasCached = Boolean(peekReviewListCache());
 
     void (async () => {
-      if (inFlightRef.current) {
-        return;
+      if (!hasCached || force) {
+        setIsLoading(true);
       }
-      inFlightRef.current = true;
-      setIsLoading(true);
       setError(null);
       try {
         const result = await fetchReviewListCached(controller.signal, { force });
         if (requestId !== requestIdRef.current) {
           return;
         }
-        setData({
-          items: sortSummariesNewestFirst(result.items),
-          total: result.total,
-        });
+        setData(normalizeList(result));
       } catch (err) {
-        if (controller.signal.aborted || requestId !== requestIdRef.current) {
+        if (
+          controller.signal.aborted ||
+          requestId !== requestIdRef.current ||
+          isAbortError(err)
+        ) {
           return;
         }
-        setData(null);
+        if (!peekReviewListCache()) {
+          setData(null);
+        }
         setError(toErrorMessage(err));
       } finally {
-        inFlightRef.current = false;
         if (requestId === requestIdRef.current) {
           setIsLoading(false);
         }
@@ -105,11 +127,12 @@ export function useReviewList(options?: {
       return;
     }
     const onFocus = () => {
-      refetch({ force: true });
+      // Soft refresh — keep cache, don't flash loading.
+      setRetryToken((token) => token + 1);
     };
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
-  }, [enabled, refetchOnFocus, refetch]);
+  }, [enabled, refetchOnFocus]);
 
   return {
     items: data?.items ?? [],

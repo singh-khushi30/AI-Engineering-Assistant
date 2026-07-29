@@ -1,14 +1,28 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Check, Copy, Eye, FileCode2, FileJson, FileText, Loader2, Plus } from "lucide-react";
+import {
+  Check,
+  Copy,
+  Eye,
+  FileCode2,
+  FileJson,
+  FileText,
+  FolderOpen,
+} from "lucide-react";
 
 import { ReportPreviewModal } from "@/components/reports/ReportPreviewModal";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { ErrorState, inferErrorKind } from "@/components/ui/ErrorState";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { ReportsSkeleton } from "@/components/ui/Skeleton";
+import { useToast } from "@/components/ui/Toast";
 import { useReviewList } from "@/hooks/useReviewList";
 import { useReviewResult } from "@/hooks/useReviewResult";
+import { surfaces } from "@/lib/design";
 import {
   mapApiReviewToReportItems,
   pickLatestCompleted,
@@ -31,6 +45,7 @@ function LiveReportCard({
 }) {
   const Icon = icons[report.format];
   const [copied, setCopied] = useState(false);
+  const { toast } = useToast();
 
   async function copyPath() {
     if (!report.backendPath) {
@@ -39,14 +54,25 @@ function LiveReportCard({
     try {
       await navigator.clipboard.writeText(report.backendPath);
       setCopied(true);
+      toast({
+        title: "Path copied",
+        description: "Report path copied to clipboard.",
+        tone: "success",
+        durationMs: 2500,
+      });
       window.setTimeout(() => setCopied(false), 1600);
     } catch {
       setCopied(false);
+      toast({
+        title: "Copy failed",
+        description: "Could not write to the clipboard.",
+        tone: "error",
+      });
     }
   }
 
   return (
-    <article className="rounded-xl border border-slate-800 bg-zinc-900/50 p-5 shadow-sm shadow-black/20">
+    <article className={cn(surfaces.cardInteractive)}>
       <div className="flex items-start gap-3">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-blue-300 ring-1 ring-blue-500/20">
           <Icon className="size-5" aria-hidden />
@@ -67,7 +93,7 @@ function LiveReportCard({
               Review:{" "}
               <Link
                 href={`/reviews/${report.reviewId}`}
-                className="text-blue-400 hover:text-blue-300"
+                className="text-blue-400 transition-colors hover:text-blue-300"
               >
                 {report.reviewId.slice(0, 8)}…
               </Link>
@@ -87,7 +113,7 @@ function LiveReportCard({
             variant="secondary"
             size="sm"
             onClick={() => onPreview(report)}
-            className={cn("min-w-[110px]")}
+            className="min-w-[110px]"
           >
             <Eye className="size-3.5" aria-hidden />
             Preview
@@ -115,7 +141,7 @@ function LiveReportCard({
 }
 
 export function LiveReportsLibrary() {
-  const list = useReviewList({ refetchOnFocus: true });
+  const list = useReviewList({ refetchOnFocus: false });
   const latest = useMemo(() => pickLatestCompleted(list.items), [list.items]);
   const result = useReviewResult(latest?.id, { enabled: Boolean(latest?.id) });
   const [preview, setPreview] = useState<ReportItem | null>(null);
@@ -127,76 +153,64 @@ export function LiveReportsLibrary() {
     return mapApiReviewToReportItems(result.data);
   }, [result.data]);
 
-  useEffect(() => {
-    // no-op placeholder for future multi-review aggregation
-  }, []);
-
   if (list.isLoading && !latest) {
-    return (
-      <div className="flex items-center gap-2 text-sm text-slate-400" aria-busy="true">
-        <Loader2 className="size-4 animate-spin" aria-hidden />
-        Loading reports…
-      </div>
-    );
+    return <ReportsSkeleton />;
   }
 
   if (list.error && !latest) {
     return (
-      <div className="rounded-xl border border-red-900/40 bg-red-950/20 p-6">
-        <h1 className="text-xl font-semibold text-slate-50">Unable to load reports</h1>
-        <p className="mt-2 text-sm text-red-300">{list.error}</p>
-        <Button className="mt-4" variant="primary" onClick={() => list.refetch({ force: true })}>
-          Retry
-        </Button>
-      </div>
+      <ErrorState
+        kind={inferErrorKind(list.error)}
+        title="Unable to load reports"
+        description={list.error}
+        onRetry={() => list.refetch({ force: true })}
+      />
     );
   }
 
   if (!latest) {
     return (
-      <div className="rounded-xl border border-slate-800 bg-zinc-900/40 p-6 text-center">
-        <h1 className="text-2xl font-semibold text-slate-50">No reports yet</h1>
-        <p className="mt-2 text-sm text-slate-400">
-          Completed reviews export JSON, Markdown, and HTML artifacts on the backend host.
-        </p>
-        <Link href="/reviews/new" className="mt-6 inline-block">
-          <Button variant="primary">
-            <Plus className="size-4" aria-hidden />
-            Start New Review
-          </Button>
-        </Link>
-      </div>
+      <EmptyState
+        icon={FolderOpen}
+        title="No reports yet"
+        description="Completed reviews export JSON, Markdown, and HTML artifacts on the backend host."
+        primaryAction={{
+          label: "Start New Review",
+          href: "/reviews/new",
+          variant: "primary",
+        }}
+        secondaryAction={{
+          label: "Browse Reviews",
+          href: "/reviews",
+        }}
+      />
     );
   }
 
   if (result.isLoading && reports.length === 0) {
-    return (
-      <div className="space-y-4" aria-busy="true">
-        <div className="h-8 w-40 animate-pulse rounded bg-slate-800" />
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, index) => (
-            <div key={index} className="h-48 animate-pulse rounded-xl bg-slate-800/70" />
-          ))}
-        </div>
-      </div>
-    );
+    return <ReportsSkeleton />;
   }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-50">Reports</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Artifacts from {latest.project_name}. Files live on the backend filesystem.
-        </p>
-      </div>
+      <PageHeader
+        title="Reports"
+        description={`Artifacts from ${latest.project_name}. Files live on the backend filesystem.`}
+      />
 
       {reports.length === 0 ? (
-        <div className="rounded-xl border border-slate-800 bg-zinc-900/40 px-4 py-10 text-center text-sm text-slate-500">
-          No report artifact paths were returned for this review.
-        </div>
+        <EmptyState
+          icon={FolderOpen}
+          title="No report artifacts"
+          description="No report artifact paths were returned for this review."
+          primaryAction={{
+            label: "Open Review",
+            href: `/reviews/${latest.id}`,
+            variant: "primary",
+          }}
+        />
       ) : (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {reports.map((report) => (
             <LiveReportCard key={report.id} report={report} onPreview={setPreview} />
           ))}

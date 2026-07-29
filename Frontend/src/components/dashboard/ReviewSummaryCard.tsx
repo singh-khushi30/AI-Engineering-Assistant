@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 
 import { SeverityBadge } from "@/components/dashboard/SeverityBadge";
+import { surfaces } from "@/lib/design";
 import { cn } from "@/lib/utils";
 import type { ReviewSummaryCardData, ReviewSummaryKind } from "@/types/dashboard";
 
@@ -48,7 +49,7 @@ export function ReviewSummaryCard({ data, className }: ReviewSummaryCardProps) {
   return (
     <article
       className={cn(
-        "group rounded-xl border border-slate-800 bg-zinc-900/50 p-5 shadow-sm shadow-black/20 transition-colors hover:border-slate-700 hover:bg-zinc-900",
+        surfaces.cardInteractive,
         className,
       )}
     >

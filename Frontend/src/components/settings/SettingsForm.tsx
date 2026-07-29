@@ -6,7 +6,9 @@ import { SettingsSection } from "@/components/settings/SettingsSection";
 import { Toggle } from "@/components/settings/Toggle";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { Select } from "@/components/ui/Select";
+import { useToast } from "@/components/ui/Toast";
 import {
   defaultSettings,
   type ProviderOption,
@@ -21,42 +23,36 @@ const providerOptions: Array<{ value: ProviderOption; label: ProviderOption }> =
 ];
 
 export function SettingsForm() {
+  const { toast } = useToast();
   const [settings, setSettings] = useState<SettingsState>(defaultSettings);
-  const [message, setMessage] = useState<string | null>(null);
 
   function update<K extends keyof SettingsState>(key: K, value: SettingsState[K]) {
     setSettings((current) => ({ ...current, [key]: value }));
-    setMessage(null);
   }
 
   function handleSave() {
-    setMessage("Preferences saved locally for this session.");
+    toast({
+      title: "Settings saved",
+      description: "Preferences saved locally for this session.",
+      tone: "success",
+    });
   }
 
   function handleReset() {
     setSettings(defaultSettings);
-    setMessage("Defaults restored.");
+    toast({
+      title: "Defaults restored",
+      description: "Settings were reset to the built-in defaults.",
+      tone: "info",
+    });
   }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-50">
-          Settings
-        </h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Providers, preferences, and defaults
-        </p>
-      </div>
-
-      {message ? (
-        <p
-          role="status"
-          className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300"
-        >
-          {message}
-        </p>
-      ) : null}
+      <PageHeader
+        title="Settings"
+        description="Providers, preferences, and defaults"
+      />
 
       <SettingsSection
         title="Provider Preferences"
@@ -153,10 +149,10 @@ export function SettingsForm() {
       </SettingsSection>
 
       <div className="flex flex-wrap gap-3">
-        <Button variant="primary" onClick={handleSave}>
+        <Button variant="primary" size="lg" onClick={handleSave}>
           Save Preferences
         </Button>
-        <Button variant="secondary" onClick={handleReset}>
+        <Button variant="secondary" size="lg" onClick={handleReset}>
           Reset Defaults
         </Button>
       </div>

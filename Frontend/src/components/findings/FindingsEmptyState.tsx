@@ -1,5 +1,7 @@
 import { CheckCircle2 } from "lucide-react";
 
+import { EmptyState } from "@/components/ui/EmptyState";
+
 type FindingsEmptyStateProps = {
   title: string;
   description: string;
@@ -16,12 +18,12 @@ export function FindingsEmptyState({
   scanSummary,
 }: FindingsEmptyStateProps) {
   return (
-    <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-6 py-10 text-center">
-      <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-300">
-        <CheckCircle2 className="size-6" aria-hidden />
-      </div>
-      <h2 className="mt-4 text-lg font-semibold text-slate-50">{title}</h2>
-      <p className="mt-2 text-sm text-slate-400">{description}</p>
+    <EmptyState
+      icon={CheckCircle2}
+      title={title}
+      description={description}
+      tone="success"
+    >
       {scanSummary ? (
         <dl className="mx-auto mt-6 grid max-w-lg grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="rounded-lg border border-slate-800 bg-zinc-950/50 px-3 py-2">
@@ -44,6 +46,6 @@ export function FindingsEmptyState({
           </div>
         </dl>
       ) : null}
-    </div>
+    </EmptyState>
   );
 }

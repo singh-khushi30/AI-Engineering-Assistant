@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.services.review_jobs import ReviewJobManager, get_review_job_manager
+from app.services.review_jobs import ReviewJobManager
 
 client = TestClient(app)
 
