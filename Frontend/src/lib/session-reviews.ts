@@ -1,6 +1,6 @@
 import type { StartReviewRequest } from "@/types/api";
 
-const DRAFT_FORM_KEY = "aea.review.form.draft";
+export const DRAFT_FORM_KEY = "aea.review.form.draft";
 
 function canUseSessionStorage(): boolean {
   return typeof window !== "undefined" && typeof window.sessionStorage !== "undefined";

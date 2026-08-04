@@ -1,10 +1,19 @@
-import { Download, Eye, FileCode2, FileJson, FileText, Package } from "lucide-react";
+"use client";
 
+import { useState } from "react";
+import { Download, Eye, FileCode2, FileJson, FileText, Loader2, Package } from "lucide-react";
+
+import { ReportPreviewModal } from "@/components/reports/ReportPreviewModal";
+import { useToast } from "@/components/ui/Toast";
+import { ApiError } from "@/lib/http";
 import { cn } from "@/lib/utils";
+import { reviewService } from "@/services/review.service";
 import type { ReportTile } from "@/types/dashboard";
+import type { ReportItem } from "@/types/report";
 
 type ReportsCardProps = {
   reports: ReportTile[];
+  reviewId?: string;
   className?: string;
 };
 
@@ -24,7 +33,67 @@ const reportVisual = {
   },
 } as const;
 
-export function ReportsCard({ reports, className }: ReportsCardProps) {
+export function ReportsCard({ reports, reviewId, className }: ReportsCardProps) {
+  const { toast } = useToast();
+  const [preview, setPreview] = useState<ReportItem | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  async function handleReportClick(report: ReportTile) {
+    if (!reviewId || report.variant === "all") {
+      toast({
+        title: "Report unavailable",
+        description: "Open the Reports page after a completed review.",
+        tone: "warning",
+      });
+      return;
+    }
+
+    const format = report.variant;
+    setBusyId(report.id);
+
+    try {
+      if (format === "html") {
+        reviewService.openReport(reviewId, "html");
+        toast({
+          title: "Opening HTML report",
+          description: report.name,
+          tone: "success",
+          durationMs: 2500,
+        });
+        return;
+      }
+
+      const text = await reviewService.fetchReportText(reviewId, format);
+      setPreview({
+        id: report.id,
+        fileName: report.name,
+        format,
+        project: report.name.replace(/-review\.(json|md)$/i, ""),
+        generatedAt: "Latest review",
+        sizeLabel: `${Math.max(1, Math.round(text.length / 1024))} KB`,
+        provider: "",
+        preview: text,
+        reviewId,
+        canDownload: true,
+        canPreview: true,
+      });
+    } catch (error) {
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : "Unable to open report.";
+      toast({
+        title: "Could not open report",
+        description: message,
+        tone: "error",
+      });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   return (
     <section
       className={cn(
@@ -42,12 +111,15 @@ export function ReportsCard({ reports, className }: ReportsCardProps) {
           const visual = reportVisual[report.variant];
           const Icon = visual.icon;
           const ActionIcon = report.variant === "html" ? Eye : Download;
+          const isBusy = busyId === report.id;
 
           return (
             <button
               key={report.id}
               type="button"
-              className="flex items-center gap-3 rounded-xl border border-slate-800 bg-zinc-950/50 p-3 text-left transition-colors hover:border-slate-700 hover:bg-zinc-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              disabled={!reviewId || isBusy}
+              onClick={() => void handleReportClick(report)}
+              className="flex items-center gap-3 rounded-xl border border-slate-800 bg-zinc-950/50 p-3 text-left transition-colors hover:border-slate-700 hover:bg-zinc-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <span
                 className={cn(
@@ -55,7 +127,11 @@ export function ReportsCard({ reports, className }: ReportsCardProps) {
                   visual.accent,
                 )}
               >
-                <Icon className="size-5" aria-hidden />
+                {isBusy ? (
+                  <Loader2 className="size-5 animate-spin" aria-hidden />
+                ) : (
+                  <Icon className="size-5" aria-hidden />
+                )}
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block text-sm font-medium text-slate-100">
@@ -63,13 +139,35 @@ export function ReportsCard({ reports, className }: ReportsCardProps) {
                 </span>
                 <span className="mt-0.5 inline-flex items-center gap-1 text-xs text-slate-500">
                   <ActionIcon className="size-3.5" aria-hidden />
-                  {report.actionLabel}
+                  {report.variant === "html" ? "View report" : "Preview & download"}
                 </span>
               </span>
             </button>
           );
         })}
       </div>
+
+      <ReportPreviewModal
+        report={preview}
+        onClose={() => setPreview(null)}
+        onDownload={
+          preview?.reviewId
+            ? async () => {
+                await reviewService.downloadReport(
+                  preview.reviewId!,
+                  preview.format,
+                  preview.fileName,
+                );
+                toast({
+                  title: "Download started",
+                  description: preview.fileName,
+                  tone: "success",
+                  durationMs: 2500,
+                });
+              }
+            : undefined
+        }
+      />
     </section>
   );
 }

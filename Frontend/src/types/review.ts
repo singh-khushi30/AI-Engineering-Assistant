@@ -58,6 +58,10 @@ export type ReviewDetail = {
     title: string;
     severity: SeverityLevel;
     file: string;
+    detail?: string;
+    recommendation?: string;
+    line?: number | null;
+    category?: string;
   }>;
   timeline: Array<{
     id: string;

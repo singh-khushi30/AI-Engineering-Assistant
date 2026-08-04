@@ -5,11 +5,13 @@ import Link from "next/link";
 import {
   Check,
   Copy,
+  Download,
   Eye,
   FileCode2,
   FileJson,
   FileText,
   FolderOpen,
+  Loader2,
 } from "lucide-react";
 
 import { ReportPreviewModal } from "@/components/reports/ReportPreviewModal";
@@ -23,11 +25,13 @@ import { useToast } from "@/components/ui/Toast";
 import { useReviewList } from "@/hooks/useReviewList";
 import { useReviewResult } from "@/hooks/useReviewResult";
 import { surfaces } from "@/lib/design";
+import { ApiError } from "@/lib/http";
 import {
   mapApiReviewToReportItems,
   pickLatestCompleted,
 } from "@/lib/review-mappers";
 import { cn } from "@/lib/utils";
+import { reviewService } from "@/services/review.service";
 import type { ReportItem } from "@/types/report";
 
 const icons = {
@@ -45,6 +49,7 @@ function LiveReportCard({
 }) {
   const Icon = icons[report.format];
   const [copied, setCopied] = useState(false);
+  const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
   async function copyPath() {
@@ -68,6 +73,80 @@ function LiveReportCard({
         description: "Could not write to the clipboard.",
         tone: "error",
       });
+    }
+  }
+
+  async function openPreview() {
+    if (!report.reviewId) {
+      onPreview(report);
+      return;
+    }
+
+    if (report.format === "html") {
+      reviewService.openReport(report.reviewId, "html");
+      return;
+    }
+
+    if (report.preview.trim()) {
+      onPreview(report);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const text = await reviewService.fetchReportText(
+        report.reviewId,
+        report.format,
+      );
+      onPreview({ ...report, preview: text });
+    } catch (error) {
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : "Unable to open report.";
+      toast({
+        title: "Could not open report",
+        description: message,
+        tone: "error",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function download() {
+    if (!report.reviewId) {
+      return;
+    }
+    setLoading(true);
+    try {
+      await reviewService.downloadReport(
+        report.reviewId,
+        report.format,
+        report.fileName,
+      );
+      toast({
+        title: "Download started",
+        description: report.fileName,
+        tone: "success",
+        durationMs: 2500,
+      });
+    } catch (error) {
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : "Download failed.";
+      toast({
+        title: "Download failed",
+        description: message,
+        tone: "error",
+      });
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -112,11 +191,28 @@ function LiveReportCard({
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => onPreview(report)}
+            onClick={() => void openPreview()}
+            disabled={loading}
             className="min-w-[110px]"
           >
-            <Eye className="size-3.5" aria-hidden />
-            Preview
+            {loading ? (
+              <Loader2 className="size-3.5 animate-spin" aria-hidden />
+            ) : (
+              <Eye className="size-3.5" aria-hidden />
+            )}
+            {report.format === "html" ? "Open" : "Preview"}
+          </Button>
+        ) : null}
+        {report.reviewId && report.canDownload !== false ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => void download()}
+            disabled={loading}
+            className="min-w-[110px]"
+          >
+            <Download className="size-3.5" aria-hidden />
+            Download
           </Button>
         ) : null}
         {report.backendPath ? (
@@ -217,7 +313,20 @@ export function LiveReportsLibrary() {
         </div>
       )}
 
-      <ReportPreviewModal report={preview} onClose={() => setPreview(null)} />
+      <ReportPreviewModal
+        report={preview}
+        onClose={() => setPreview(null)}
+        onDownload={
+          preview?.reviewId
+            ? () =>
+                reviewService.downloadReport(
+                  preview.reviewId!,
+                  preview.format,
+                  preview.fileName,
+                )
+            : undefined
+        }
+      />
     </div>
   );
 }

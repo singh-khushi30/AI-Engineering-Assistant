@@ -359,17 +359,60 @@ export function mapApiReviewToReviewDetail(
     };
   });
 
+  const flatFindings = findingGroups.flatMap((group) =>
+    group.findings.map((finding) => ({
+      ...finding,
+      category: group.category,
+    })),
+  );
+  const recommendations = asArray(report.recommendations);
+
   const prioritizedIssues = topIssues.slice(0, 10).map((item, index) => {
     const issue = asRecord(item);
+    const title =
+      asString(issue.title, "") ||
+      asString(issue.issue, "Untitled issue");
+    const file =
+      asString(issue.file, "") ||
+      asString(issue.file_path, "Not applicable");
+    const matched = flatFindings.find(
+      (finding) =>
+        finding.title === title &&
+        (finding.file === file ||
+          file === "Not applicable" ||
+          finding.file === "Not applicable"),
+    );
+    const matchedRec = recommendations.find((rec) => {
+      const row = asRecord(rec);
+      return asString(row.title, "") === title;
+    });
+    const recRow = matchedRec ? asRecord(matchedRec) : null;
+
     return {
       id: `issue-${index}`,
-      title:
-        asString(issue.title, "") ||
-        asString(issue.issue, "Untitled issue"),
+      title,
       severity: mapApiSeverityToUiSeverity(issue.severity),
-      file:
-        asString(issue.file, "") ||
-        asString(issue.file_path, "Not applicable"),
+      file,
+      detail:
+        asString(issue.detail, "") ||
+        asString(issue.description, "") ||
+        asString(issue.message, "") ||
+        matched?.detail ||
+        "",
+      recommendation:
+        asString(issue.recommendation, "") ||
+        asString(recRow?.rationale, "") ||
+        asString(recRow?.recommendation, "") ||
+        "",
+      line:
+        asNumber(issue.line) ??
+        asNumber(issue.line_number) ??
+        matched?.line ??
+        null,
+      category:
+        asString(issue.category, "") ||
+        matched?.category ||
+        undefined,
     };
   });
 
@@ -475,7 +518,7 @@ export function mapApiReviewToDashboardData(
     .map((format) => ({
       id: `${payload.id}-${format}`,
       name: `${detail.projectName}-review.${format === "markdown" ? "md" : format}`,
-      actionLabel: "Available on backend",
+      actionLabel: format === "html" ? "View report" : "Preview & download",
       variant: format,
     }));
 
@@ -526,7 +569,7 @@ export function mapApiReviewToReportItems(
             null,
             2,
           )
-        : `Report file available on the backend host:\n${pathValue}`;
+        : "";
 
     items.push({
       id: `${payload.id}-${entry.format}`,
@@ -534,13 +577,13 @@ export function mapApiReviewToReportItems(
       format: entry.format,
       project: payload.project_name,
       generatedAt: formatDateLabel(payload.completed_at ?? payload.created_at),
-      sizeLabel: "Available on backend",
+      sizeLabel: "Ready to open",
       provider: mapApiProviderToLabel(payload.provider),
       preview,
       backendPath: pathValue,
       reviewId: payload.id,
-      canDownload: false,
-      canPreview: entry.format === "json" || Boolean(pathValue),
+      canDownload: true,
+      canPreview: true,
     });
   }
 

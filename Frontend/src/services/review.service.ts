@@ -1,4 +1,11 @@
 import { http } from "@/lib/http";
+import {
+  downloadReviewReport,
+  fetchReviewReportText,
+  getReviewReportUrl,
+  openReviewReportInNewTab,
+  type ReportDownloadFormat,
+} from "@/lib/report-download";
 import type {
   ReviewListResponse,
   ReviewResultResponse,
@@ -76,5 +83,30 @@ export const reviewService = {
         signal,
       },
     );
+  },
+
+  reportUrl(id: string, format: ReportDownloadFormat): string {
+    return getReviewReportUrl(id, format);
+  },
+
+  fetchReportText(
+    id: string,
+    format: ReportDownloadFormat,
+    signal?: AbortSignal,
+  ): Promise<string> {
+    return fetchReviewReportText(id, format, signal);
+  },
+
+  downloadReport(
+    id: string,
+    format: ReportDownloadFormat,
+    fileName: string,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    return downloadReviewReport(id, format, fileName, signal);
+  },
+
+  openReport(id: string, format: ReportDownloadFormat): void {
+    openReviewReportInNewTab(id, format);
   },
 };

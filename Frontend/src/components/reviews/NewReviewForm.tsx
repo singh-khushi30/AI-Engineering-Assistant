@@ -10,8 +10,9 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { AlertTriangle, Loader2, RefreshCw } from "lucide-react";
+import { AlertTriangle, FolderSearch, Loader2, RefreshCw } from "lucide-react";
 
+import { FolderPickerModal } from "@/components/reviews/FolderPickerModal";
 import { Toggle } from "@/components/settings/Toggle";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -22,7 +23,7 @@ import { useDefaultProvider } from "@/hooks/useDefaultProvider";
 import { useHealth } from "@/hooks/useHealth";
 import { useStartReview } from "@/hooks/useStartReview";
 import { surfaces } from "@/lib/design";
-import { loadReviewFormDraft, saveReviewFormDraft } from "@/lib/session-reviews";
+import { DRAFT_FORM_KEY, saveReviewFormDraft } from "@/lib/session-reviews";
 import { cn } from "@/lib/utils";
 import type { ReviewProvider, StartReviewRequest } from "@/types/api";
 
@@ -51,23 +52,47 @@ function subscribeDraft() {
   return () => {};
 }
 
-function readDraftFields(): Omit<StartReviewRequest, "provider"> | null {
-  const draft = loadReviewFormDraft();
-  if (!draft) {
+type DraftFields = Omit<StartReviewRequest, "provider">;
+
+let cachedDraftRaw: string | null | undefined;
+let cachedDraftFields: DraftFields | null = null;
+
+function readDraftFields(): DraftFields | null {
+  // useSyncExternalStore requires a stable snapshot reference when data is unchanged.
+  const raw =
+    typeof window !== "undefined"
+      ? window.sessionStorage.getItem(DRAFT_FORM_KEY)
+      : null;
+
+  if (raw === cachedDraftRaw) {
+    return cachedDraftFields;
+  }
+
+  cachedDraftRaw = raw;
+  if (!raw) {
+    cachedDraftFields = null;
     return null;
   }
-  // Provider for new reviews comes from the navbar default, not the draft.
-  return {
-    project_path: draft.project_path,
-    include_git: draft.include_git,
-    include_bandit: draft.include_bandit,
-    include_ruff: draft.include_ruff,
-    include_pytest: draft.include_pytest,
-    include_coverage: draft.include_coverage,
-    coverage_target: draft.coverage_target,
-    timeout_seconds: draft.timeout_seconds,
-    enable_fallback: draft.enable_fallback,
-  };
+
+  try {
+    const draft = JSON.parse(raw) as StartReviewRequest;
+    // Provider for new reviews comes from the navbar default, not the draft.
+    cachedDraftFields = {
+      project_path: draft.project_path,
+      include_git: draft.include_git,
+      include_bandit: draft.include_bandit,
+      include_ruff: draft.include_ruff,
+      include_pytest: draft.include_pytest,
+      include_coverage: draft.include_coverage,
+      coverage_target: draft.coverage_target,
+      timeout_seconds: draft.timeout_seconds,
+      enable_fallback: draft.enable_fallback,
+    };
+  } catch {
+    cachedDraftFields = null;
+  }
+
+  return cachedDraftFields;
 }
 
 export function NewReviewForm() {
@@ -76,6 +101,7 @@ export function NewReviewForm() {
   const pathRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { provider: defaultProvider } = useDefaultProvider();
+  const [folderPickerOpen, setFolderPickerOpen] = useState(false);
   const { isOnline, isLoading: healthLoading, retry: retryHealth } = useHealth({
     pollIntervalMs: 30_000,
   });
@@ -219,26 +245,42 @@ export function NewReviewForm() {
         aria-describedby={error ? formErrorId : undefined}
       >
         <div className="space-y-1.5">
-          <Input
-            ref={pathRef}
-            id={`${formId}-path`}
-            name="project_path"
-            label="Repository Path"
-            placeholder="/Users/your-name/projects/my-project"
-            value={form.project_path}
-            onChange={(event) => updateField("project_path", event.target.value)}
-            required
-            disabled={isSubmitting || offline}
-            aria-invalid={Boolean(fieldErrors.project_path)}
-            aria-describedby={
-              fieldErrors.project_path
-                ? pathErrorId
-                : `${formId}-path-help`
-            }
-          />
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+            <div className="min-w-0 flex-1">
+              <Input
+                ref={pathRef}
+                id={`${formId}-path`}
+                name="project_path"
+                label="Repository Path"
+                placeholder="/Users/your-name/projects/my-project"
+                value={form.project_path}
+                onChange={(event) =>
+                  updateField("project_path", event.target.value)
+                }
+                required
+                disabled={isSubmitting || offline}
+                aria-invalid={Boolean(fieldErrors.project_path)}
+                aria-describedby={
+                  fieldErrors.project_path
+                    ? pathErrorId
+                    : `${formId}-path-help`
+                }
+              />
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={isSubmitting || offline}
+              onClick={() => setFolderPickerOpen(true)}
+              aria-haspopup="dialog"
+            >
+              <FolderSearch className="size-4" aria-hidden />
+              Choose folder
+            </Button>
+          </div>
           <p id={`${formId}-path-help`} className="text-xs text-slate-500">
-            Enter the absolute path of a repository accessible to the backend
-            server.
+            Choose a folder from this machine, or paste the absolute path of a
+            repository accessible to the backend server.
           </p>
           {fieldErrors.project_path ? (
             <p id={pathErrorId} className="text-xs text-red-400" role="alert">
@@ -246,6 +288,21 @@ export function NewReviewForm() {
             </p>
           ) : null}
         </div>
+
+        <FolderPickerModal
+          open={folderPickerOpen}
+          initialPath={form.project_path}
+          onClose={() => setFolderPickerOpen(false)}
+          onSelect={(path) => {
+            updateField("project_path", path);
+            setFolderPickerOpen(false);
+            toast({
+              title: "Folder selected",
+              description: path,
+              tone: "success",
+            });
+          }}
+        />
 
         <Select
           id={`${formId}-provider`}

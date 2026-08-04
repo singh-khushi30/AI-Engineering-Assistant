@@ -107,7 +107,10 @@ export function ReviewDetailView({ review }: ReviewDetailViewProps) {
                     </div>
                   )}
                 </div>
-                <PrioritizedIssues issues={review.prioritizedIssues} />
+                <PrioritizedIssues
+                  issues={review.prioritizedIssues}
+                  onViewAll={() => setActiveTab("findings")}
+                />
               </div>
             </section>
 

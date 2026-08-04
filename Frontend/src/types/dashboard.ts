@@ -66,6 +66,10 @@ export type PrioritizedIssue = {
   title: string;
   severity: SeverityLevel;
   file: string;
+  detail?: string;
+  recommendation?: string;
+  line?: number | null;
+  category?: string;
 };
 
 export type ReportTile = {

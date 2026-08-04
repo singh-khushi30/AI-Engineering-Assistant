@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   CloudOff,
   FileSearch,
@@ -97,6 +98,7 @@ function RunningDashboardCard({
 }
 
 export function LiveDashboardView() {
+  const router = useRouter();
   const { isOnline, isOffline } = useHealth({ pollIntervalMs: 30_000 });
   const {
     mode,
@@ -293,8 +295,16 @@ export function LiveDashboardView() {
           reviewId={latestCompleted.id}
         />
         <div className="space-y-6">
-          <PrioritizedIssues issues={data.prioritizedIssues} />
-          <ReportsCard reports={data.reports} />
+          <PrioritizedIssues
+            issues={data.prioritizedIssues}
+            onViewAll={() =>
+              router.push(`/reviews/${latestCompleted.id}`)
+            }
+          />
+          <ReportsCard
+            reports={data.reports}
+            reviewId={latestCompleted.id}
+          />
         </div>
       </section>
     </div>
